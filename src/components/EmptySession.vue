@@ -94,34 +94,36 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="empty relative mt-4 flex min-h-[140px] flex-1 flex-col items-center justify-center gap-3 overflow-hidden rounded-xl border border-dashed border-line-strong/70 px-5 py-5 text-center">
-    <!-- Größen-Container: zählt nicht zur Mindesthöhe der Karte, sondern füllt nur den Platz, den die
-         Kartenreihe hergibt. Sonst bestimmt eine leere Karte die Höhe der ganzen Reihe. -->
+  <!-- Größen-Container: zählt nicht zur Höhe der Karte, sondern füllt nur den Platz, den die
+       Kartenreihe hergibt. Steht die Karte neben einer laufenden Session, wird sie so hoch wie diese;
+       sind alle Karten der Reihe frisch, bleibt es bei der kompakten Mindesthöhe. -->
+  <div class="empty relative mt-4 flex min-h-[176px] flex-1 overflow-hidden rounded-xl border border-dashed border-line-strong/70">
     <!-- Warmer Schein hinter Clawd, nach außen ganz weg -->
-    <div aria-hidden="true" class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_32%,color-mix(in_oklab,var(--color-brand)_14%,transparent),transparent_55%)]" />
+    <div aria-hidden="true" class="empty-glow pointer-events-none absolute inset-0" />
     <!-- Feines Punktraster, zur Mitte hin sichtbar -->
-    <div
-      aria-hidden="true"
-      class="pointer-events-none absolute inset-0 opacity-70 [background-image:radial-gradient(var(--color-line-strong)_1px,transparent_1px)] [background-size:16px_16px] [mask-image:radial-gradient(circle_at_50%_45%,black,transparent_70%)]"
-    />
+    <div aria-hidden="true" class="empty-dots pointer-events-none absolute inset-0 opacity-70" />
 
-    <!-- Clawd schläft (aus TokenScope); bei reduzierter Bewegung nur das erste Bild -->
-    <picture class="relative">
-      <source :srcset="sleepingStill" media="(prefers-reduced-motion: reduce)" />
-      <img :src="sleepingGif" alt="" width="54" height="68" class="[image-rendering:pixelated]" />
-    </picture>
+    <div class="empty-body relative flex flex-1 flex-col items-center justify-center gap-3 px-5 py-4 text-center">
+      <!-- Clawd schläft (aus TokenScope); bei reduzierter Bewegung nur das erste Bild -->
+      <picture class="shrink-0">
+        <source :srcset="sleepingStill" media="(prefers-reduced-motion: reduce)" />
+        <img :src="sleepingGif" alt="" width="54" height="68" class="[image-rendering:pixelated]" />
+      </picture>
 
-    <div class="relative space-y-0.5">
-      <p class="text-[14px] font-semibold text-ink-2">Clawd wartet auf die erste Anfrage</p>
-      <p class="empty-hint mx-auto max-w-[36ch] text-[12.5px] text-balance text-ink-3">
-        Sobald du {{ vscode ? 'in VS Code' : 'im Terminal' }} loslegst, stehen hier Anfrage, Schritte und Kontext.
-      </p>
-    </div>
+      <div class="empty-text flex min-w-0 flex-col items-center gap-3">
+        <div class="space-y-0.5">
+          <p class="text-[14px] font-semibold text-ink-2">Clawd wartet auf die erste Anfrage</p>
+          <p class="empty-hint mx-auto max-w-[36ch] text-[12.5px] text-balance text-ink-3">
+            Sobald du {{ vscode ? 'in VS Code' : 'im Terminal' }} loslegst, stehen hier Anfrage, Schritte und Kontext.
+          </p>
+        </div>
 
-    <div class="empty-cmd relative flex w-full max-w-[220px] items-center gap-2 rounded-md border border-line-strong bg-app/60 px-2.5 py-1 font-mono text-[12px] text-ink-3">
-      <span class="w-[1ch] shrink-0" :class="shell ? 'text-series-7' : 'text-brand'">{{ shell ? '!' : '>' }}</span>
-      <span class="-mr-1 truncate whitespace-pre text-ink-2" aria-hidden="true">{{ typed }}</span>
-      <span class="h-3.5 w-[6px] shrink-0 rounded-[1px] bg-ink-2" :class="{ 'caret-blink': !typed }" aria-hidden="true" />
+        <div class="flex w-full max-w-[220px] items-center gap-2 rounded-md border border-line-strong bg-app/60 px-2.5 py-1 font-mono text-[12px] text-ink-3">
+          <span class="w-[1ch] shrink-0" :class="shell ? 'text-series-7' : 'text-brand'">{{ shell ? '!' : '>' }}</span>
+          <span class="-mr-1 truncate whitespace-pre text-ink-2" aria-hidden="true">{{ typed }}</span>
+          <span class="h-3.5 w-[6px] shrink-0 rounded-[1px] bg-ink-2" :class="{ 'caret-blink': !typed }" aria-hidden="true" />
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -129,16 +131,32 @@ onBeforeUnmount(() => {
 <style scoped>
 .empty {
   container-type: size;
+  --gx: 50%;
+  --gy: 32%;
 }
-/* Wenig Platz: erst der Hinweistext weg, dann die Eingabezeile; Clawd und die Überschrift bleiben */
+.empty-glow {
+  background: radial-gradient(circle at var(--gx) var(--gy), color-mix(in oklab, var(--color-brand) 14%, transparent), transparent 55%);
+}
+.empty-dots {
+  background-image: radial-gradient(var(--color-line-strong) 1px, transparent 1px);
+  background-size: 16px 16px;
+  mask-image: radial-gradient(circle at var(--gx) 45%, black, transparent 70%);
+}
+/* Wenig Platz: erst der Hinweistext weg … */
 @container (max-height: 236px) {
   .empty-hint {
     display: none;
   }
 }
-@container (max-height: 178px) {
-  .empty-cmd {
-    display: none;
+/* … und noch enger: Clawd etwas kleiner, alles bleibt mittig untereinander */
+@container (max-height: 168px) {
+  .empty-body {
+    gap: 0.5rem;
+    padding-block: 0.75rem;
+  }
+  .empty-body img {
+    width: 40px;
+    height: 50px;
   }
 }
 </style>

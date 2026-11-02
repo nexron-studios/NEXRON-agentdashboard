@@ -92,6 +92,10 @@ For example, `~/.claude-work` shows up as **work**.
 
 If [herdr](https://herdr.dev) is installed and its server is running, each card shows its workspace and tab (e.g. `dev › claude-2`), and running sessions are sorted in tab order. The dashboard matches sessions to tabs by process ID, using `herdr pane process-info` and Claude Code's `sessions/<pid>.json`. Without herdr, everything else works the same.
 
+### Session titles
+
+Claude Code names a session once, at the start, and never renames it. When you keep working in the same chat on something else, the dashboard asks Haiku for a new short title through `claude -p --model haiku` (no tools, no MCP servers, no saved transcript). No API key is needed: the call runs on the subscription of the profile the session belongs to. It only runs for live sessions whose topic changed, at most once every 2 minutes per session. Titles are stored in `%APPDATA%\com.nexron.agentdashboard	opics.json`, and the original title stays visible as „Gestartet als …“.
+
 ## How it works
 
 - **Live sessions** come from `sessions/<pid>.json` in each profile. Dead processes are filtered out.
@@ -105,13 +109,14 @@ npm test             # Rust tests + terminal version tests
 
 # Benchmark the parser against a real transcript:
 $env:AGENTDASHBOARD_SAMPLE = "<path>.jsonl"
-cargo test --release --manifest-path src-tauri/Cargo.toml -- --ignored --nocapture
+cargo test --release --manifest-path src-tauri/Cargo.toml parses_real_transcript -- --ignored --nocapture
 ```
 
 | Path | Contents |
 | --- | --- |
 | `src-tauri/src/sessions.rs` | Finds profiles, live sessions and transcripts |
 | `src-tauri/src/herdr.rs` | Maps sessions to herdr workspaces and tabs |
+| `src-tauri/src/topics.rs` | Short titles for the current topic via `claude -p` |
 | `src-tauri/src/transcript.rs` | Incremental transcript parser |
 | `src-tauri/src/lib.rs` | Tauri commands: `overview`, `session_detail`, `focus_herdr`, `open_folder` |
 | `src/components/` | Overview, session card, detail view, timeline, status badge, logos |

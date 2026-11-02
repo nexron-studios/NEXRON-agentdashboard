@@ -31,6 +31,8 @@ pub struct LiveSession {
     pub started_at: Option<i64>,
     pub name: Option<String>,
     pub status: Option<String>,
+    /// Wann `status` zuletzt gewechselt hat (ms); bei „idle“ also, wann Claude fertig wurde
+    pub status_updated_at: Option<i64>,
     /// Startzeit des Prozesses (Windows-FILETIME), damit eine wiederverwendete PID nicht als laufend gilt
     #[serde(skip_serializing)]
     pub proc_start: Option<String>,
@@ -100,6 +102,9 @@ pub fn live_sessions(profiles: &[Profile]) -> Vec<LiveSession> {
             let Ok(mut s) = serde_json::from_str::<LiveSession>(&text) else { continue };
             if !process_alive(s.pid, s.proc_start.as_deref()) {
                 continue; // Datei einer abgestürzten Session
+            }
+            if s.cwd.as_deref().is_some_and(|c| c.trim_end_matches(['\\', '/']).ends_with(crate::topics::WORK_DIR_NAME)) {
+                continue; // eigener Titel-Aufruf (`claude -p`) des Dashboards
             }
             s.account = p.label.clone();
             s.profile_dir = p.dir.clone();

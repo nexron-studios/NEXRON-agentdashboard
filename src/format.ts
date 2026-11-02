@@ -29,9 +29,20 @@ export function ago(t: number, now: number): string {
 
 const dateFmt = new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 const timeFmt = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit' })
+const shortDayFmt = new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit' })
 const dayFmt = new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })
 export const date = (t: number) => (t ? dateFmt.format(t) : '')
 export const time = (t: number) => (t ? timeFmt.format(t) : '')
+
+/** Uhrzeit, ab gestern mit Tag davor: „14:32“, „gestern 18:05“, „30.10. 09:12“ */
+export function clock(t: number, now: number): string {
+  if (!t) return ''
+  const day = (x: number) => new Date(x).setHours(0, 0, 0, 0)
+  const diff = Math.round((day(now) - day(t)) / 86_400_000)
+  if (diff === 0) return time(t)
+  if (diff === 1) return `gestern ${time(t)}`
+  return `${shortDayFmt.format(t)} ${time(t)}`
+}
 
 /** „Heute“, „Gestern“ oder „Freitag, 30. Oktober“ */
 export function dayLabel(t: number, now: number): string {
@@ -99,11 +110,26 @@ export function usePolling(task: () => Promise<void>, ms: number): { now: Ref<nu
  * seitdem zu einem anderen Thema gewandert, wird das aktuelle Thema zur Überschrift und der Titel
  * rückt als „Gestartet als“ darunter.
  */
-export function headline(s: { title: string; currentTask: string; currentTaskIsFirst: boolean; firstPrompt: string }) {
+export function headline(s: {
+  title: string
+  currentTask: string
+  currentTaskIsFirst: boolean
+  firstPrompt: string
+  topic?: string
+  titlePending?: boolean
+}) {
   const switched = !!s.currentTask && !s.currentTaskIsFirst
-  if (switched) return { text: s.currentTask, startedAs: s.title || s.firstPrompt, switched }
-  return { text: s.title || s.currentTask || s.firstPrompt, startedAs: '', switched }
+  // Ist ein Titel unterwegs, bleibt der bisherige stehen (oder ein Platzhalter, `pending`), statt kurz die
+  // Anfrage zu zeigen. Die Anfrage ist nur der Rückfall, wenn kein Titel kommt.
+  if (switched) {
+    if (!s.topic && s.titlePending) return { text: s.title, startedAs: '', switched, pending: !s.title }
+    return { text: s.topic || s.currentTask, startedAs: s.title || s.firstPrompt, switched, pending: false }
+  }
+  if (!s.title && s.titlePending) return { text: '', startedAs: '', switched, pending: true }
+  return { text: s.title || s.currentTask || s.firstPrompt, startedAs: '', switched, pending: false }
 }
+
+export const PENDING_TITLE = 'Titel wird erstellt …'
 
 /** Anfrage ohne Bild-Platzhalter und überzählige Leerzeichen, zum Vergleichen */
 export const plainPrompt = (t: string) => t.replace(/\[(Image|Pasted)[^\]]*\]/g, '').replace(/\s+/g, ' ').trim()

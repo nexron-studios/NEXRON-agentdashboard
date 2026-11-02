@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { ChevronDown, History, Radio, Search, TriangleAlert, UserRound } from 'lucide-vue-next'
+import { ChevronDown, CircleCheck, History, Radio, Search, TriangleAlert, UserRound } from 'lucide-vue-next'
 import type { Overview, SessionRow } from '../api'
-import { byTab, dayLabel, headline, projectName, time } from '../format'
+import { awaitsYou, byTab, dayLabel, headline, projectName, time } from '../format'
 import { accountInfo } from '../store'
+import FinishedStrip from './FinishedStrip.vue'
 import SessionCard from './SessionCard.vue'
 
 const props = defineProps<{ overview: Overview | null; error: string; now: number }>()
@@ -15,6 +16,13 @@ const live = computed(() =>
   // Feste Reihenfolge wie in herdr (claude-1, claude-2, …), damit Karten beim Statuswechsel nicht springen
   [...(props.overview?.live ?? [])].sort((a, b) => byTab(a.herdr?.tab, b.herdr?.tab) || b.startedAt - a.startedAt),
 )
+
+// Fertige Sessions nach Fertig-Zeit, die zuletzt fertig gewordene zuerst. Frische Sessions ohne
+// Anfrage sind „bereit“, nicht fertig. Plätze oben und Karten tragen dieselbe Nummer.
+const done = computed(() =>
+  live.value.filter((s) => awaitsYou(s.status) && (s.title || s.lastPrompt) && s.finishedAt).sort((a, b) => b.finishedAt - a.finishedAt),
+)
+const rank = computed(() => new Map(done.value.map((s, i) => [s.sessionId, i + 1])))
 
 const query = ref('')
 const expanded = ref(false)
@@ -42,13 +50,18 @@ const groups = computed(() => {
       <TriangleAlert :size="18" class="shrink-0 text-critical" /> {{ error }}
     </p>
 
-    <!-- Füllt das Fenster unter dem Header (4rem) und dem Abstand oben (1.25rem): die ersten
-         sechs Karten teilen sich die Fläche, „Zuletzt“ kommt erst beim Scrollen. -->
-    <section class="flex min-h-[calc(100dvh-5.25rem)] flex-col pb-6">
-      <h2 class="mb-4 flex items-center gap-2.5 text-[20px] font-semibold tracking-tight">
-        <Radio :size="20" :stroke-width="2" class="radio-pulse text-brand" /> Laufende Sessions
-        <span class="num rounded-full bg-surface-2 px-2.5 text-[14px] font-medium text-ink-2">{{ live.length }}</span>
-      </h2>
+    <!-- Jede Kartenreihe ist so hoch wie ihr Inhalt. Nicht aufs Fenster strecken: Reihen aus frischen
+         Sessions wären sonst leere, hohe Kästen, und „Zuletzt“ rückt einfach nach. -->
+    <section class="pb-6">
+      <div class="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2">
+        <h2 class="flex items-center gap-2.5 text-[20px] font-semibold tracking-tight">
+          <Radio :size="20" :stroke-width="2" class="radio-pulse text-brand" /> Laufende Sessions
+          <span class="num rounded-full bg-surface-2 px-2.5 text-[14px] font-medium text-ink-2">{{ live.length }}</span>
+        </h2>
+        <span v-if="live.length" class="ml-auto flex items-center gap-1.5 text-[12px] font-semibold tracking-wide text-ink-3 uppercase">
+          <CircleCheck :size="14" :stroke-width="2.25" class="text-good" /> Fertig · neueste zuerst
+        </span>
+      </div>
 
       <div v-if="!overview && !error" class="grid gap-4 min-[760px]:grid-cols-2 min-[1150px]:grid-cols-3">
         <div v-for="i in 2" :key="i" class="card h-64 animate-pulse" />
@@ -58,19 +71,22 @@ const groups = computed(() => {
         Gerade läuft keine Claude-Code-Session.
         <span class="text-[13px] text-ink-3">Starte <code class="font-mono">claude</code> in einem Terminal, dann taucht sie hier auf.</span>
       </div>
-      <div
-        v-else
-        class="grid flex-1 gap-4 min-[760px]:grid-cols-2 min-[760px]:grid-rows-[repeat(3,1fr)] min-[1150px]:grid-cols-3 min-[1150px]:grid-rows-[repeat(2,1fr)]"
-      >
-        <SessionCard
-          v-for="(s, i) in live"
-          :key="s.sessionId"
-          class="enter"
-          :style="{ '--i': i }"
-          :session="s"
-          :now="now"
-          @open="emit('select', s.sessionId)"
-        />
+      <!-- Karten bleiben in herdr-Reihenfolge; wer wann fertig wurde, zeigen die Plätze darüber
+           (gleiches Spaltenraster, eine Zeile pro laufender Session) -->
+      <div v-else class="@container">
+        <FinishedStrip class="mb-4" :live="live" :done="done" :now="now" @select="emit('select', $event)" />
+        <div class="grid gap-4 @min-[640px]:grid-cols-2 @min-[980px]:grid-cols-3">
+          <SessionCard
+            v-for="(s, i) in live"
+            :key="s.sessionId"
+            class="enter"
+            :style="{ '--i': i }"
+            :session="s"
+            :now="now"
+            :rank="rank.get(s.sessionId)"
+            @open="emit('select', s.sessionId)"
+          />
+        </div>
       </div>
     </section>
 

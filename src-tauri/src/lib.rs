@@ -1,5 +1,6 @@
 mod herdr;
 mod sessions;
+mod topics;
 mod transcript;
 mod window;
 
@@ -18,6 +19,8 @@ const TAIL_BYTES: u64 = 300_000;
 const CARD_AGENTS: usize = 4;
 /// Profile und Logins ändern sich selten; `.claude.json` muss nicht alle 2 s gelesen werden.
 const PROFILE_TTL: Duration = Duration::from_secs(30);
+/// So viele beendete Sessions bleiben vollständig gelesen im Speicher (zuletzt geöffnete), laufende immer.
+const DETAIL_KEEP: usize = 8;
 
 #[derive(Default)]
 struct AppState {
@@ -25,6 +28,9 @@ struct AppState {
     details: Mutex<HashMap<String, Transcript>>,
     profiles: Mutex<Option<(Instant, Vec<Profile>)>>,
     herdr: Mutex<HerdrCache>,
+    topics: topics::Topics,
+    /// Wann ein vollständig gelesenes Transkript zuletzt gebraucht wurde; zum Aufräumen von `details`
+    detail_used: Mutex<HashMap<String, Instant>>,
 }
 
 #[derive(Serialize)]
@@ -45,11 +51,17 @@ struct SessionRow {
     first_prompt: String,
     current_task: String,
     current_task_is_first: bool,
+    /// Von Haiku formulierter Titel des aktuellen Themas; leer, solange Claudes Titel noch passt
+    topic: String,
+    /// Ein Titel ist unterwegs (Claudes eigener oder ein Thema von Haiku); bis dahin keine Anfrage als Überschrift
+    title_pending: bool,
     last_prompt: String,
     prompts: u32,
     last_action: String,
     last_model: String,
     last_t: i64,
+    /// Wann Claude mit der letzten Aufgabe fertig wurde; nur sinnvoll, solange `status` idle/done ist
+    finished_at: i64,
     context: Option<Context>,
     agents: Vec<AgentRun>,
     agents_total: usize,
@@ -73,6 +85,8 @@ struct Detail {
     status: String,
     account: String,
     herdr: Option<HerdrPlace>,
+    topic: String,
+    title_pending: bool,
     stats: Stats,
 }
 
@@ -110,9 +124,28 @@ impl AppState {
             let path = path().ok_or_else(|| format!("Kein Transkript für Session {session_id} gefunden"))?;
             details.insert(session_id.to_string(), Transcript::open(path));
         }
+        self.detail_used.lock().unwrap().insert(session_id.to_string(), Instant::now());
         let t = details.get_mut(session_id).expect("eben eingefügt");
         t.refresh().map_err(|e| format!("Transkript nicht lesbar: {e}"))?;
         Ok(f(&t.stats))
+    }
+
+    /// Hält die Zwischenspeicher klein, auch wenn die App tagelang läuft: Dateienden nur für die gerade
+    /// gelistete „Zuletzt“-Auswahl, vollständige Transkripte für laufende plus die zuletzt geöffneten.
+    fn evict(&self, live_ids: &HashSet<&str>, recent_paths: &HashSet<PathBuf>) {
+        self.tails.lock().unwrap().retain(|p, _| recent_paths.contains(p));
+        let mut used = self.detail_used.lock().unwrap();
+        let mut ended: Vec<(String, Instant)> =
+            used.iter().filter(|(id, _)| !live_ids.contains(id.as_str())).map(|(id, t)| (id.clone(), *t)).collect();
+        if ended.len() <= DETAIL_KEEP {
+            return;
+        }
+        ended.sort_by_key(|(_, t)| std::cmp::Reverse(*t));
+        let mut details = self.details.lock().unwrap();
+        for (id, _) in ended.into_iter().skip(DETAIL_KEEP) {
+            details.remove(&id);
+            used.remove(&id);
+        }
     }
 
     fn herdr_places(&self, live: &[LiveSession]) -> HashMap<u32, HerdrPlace> {
@@ -123,13 +156,39 @@ impl AppState {
 
 /// herdr liest den Zustand am Terminal ab und liegt damit näher an dem, was man sieht, als
 /// `sessions/<pid>.json` (das z. B. nach einem Befehl noch „shell“ meldet, obwohl Claude fertig ist).
+/// Ausnahme: Hat Claude Code selbst „idle“ geschrieben, ist der Zug sicher vorbei. herdr bleibt
+/// manchmal auf „working“ hängen, dann stünde die Karte ewig auf „Arbeitet“.
 fn status(live: Option<&LiveSession>, herdr: Option<&HerdrPlace>) -> String {
     let Some(live) = live else { return "ended".into() };
     match herdr.map(|h| h.status.as_str()) {
+        Some("working") if live.status.as_deref() == Some("idle") => "idle".into(),
         Some("working") => "busy".into(),
         Some(s @ ("blocked" | "idle" | "done")) => s.into(),
         _ => live.status.clone().unwrap_or_else(|| "idle".into()),
     }
+}
+
+/// Der Statuswechsel auf „idle“ ist der genaue Zeitpunkt, an dem Claude fertig wurde. Meldet die
+/// Session-Datei etwas anderes (herdr ist schneller), ist der letzte Transkript-Eintrag die beste Näherung.
+fn finished_at(stats: &Stats, live: Option<&LiveSession>) -> i64 {
+    match live {
+        Some(l) if l.status.as_deref() == Some("idle") => l.status_updated_at.unwrap_or(stats.last_t),
+        _ => stats.last_t,
+    }
+}
+
+/// So lange nach der ersten Anfrage wird auf Claudes eigenen Titel gewartet; kommt keiner, steht danach die Anfrage da.
+const TITLE_WAIT_MS: i64 = 30_000;
+
+/// Kommt gleich ein Titel? Claude Code schreibt seinen Titel ein paar Sekunden nach der ersten Anfrage,
+/// das Thema nach einem Wechsel liefert Haiku. Bis dahin soll die Überschrift nicht kurz die Anfrage zeigen.
+fn title_pending(stats: &Stats, topic: &str, topics: &topics::Topics, session_id: &str) -> bool {
+    let switched = !stats.current_task.is_empty() && !stats.current_task_is_first;
+    if switched {
+        return topic.is_empty() && topics.pending(session_id);
+    }
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0);
+    stats.title.is_empty() && stats.prompt_log.first().is_some_and(|p| now - p.t < TITLE_WAIT_MS)
 }
 
 fn card_agents(stats: &Stats) -> Vec<AgentRun> {
@@ -156,11 +215,14 @@ fn row(stats: &Stats, session_id: String, account: String, live: Option<&LiveSes
         first_prompt: stats.first_prompt.clone(),
         current_task: stats.current_task.clone(),
         current_task_is_first: stats.current_task_is_first,
+        topic: String::new(),
+        title_pending: false,
         last_prompt: stats.last_prompt.clone(),
         prompts: stats.prompts,
         last_action: stats.last_action.clone(),
         last_model: stats.last_model.clone(),
         last_t: stats.last_t,
+        finished_at: finished_at(stats, live),
         context: stats.context.clone(),
         agents: card_agents(stats),
         agents_total: stats.agents.len(),
@@ -184,17 +246,31 @@ async fn overview(recent_limit: usize, state: tauri::State<'_, AppState>) -> Res
             let path = || sessions::find_transcript(&l.profile_dir, &id);
             // Eine frisch gestartete Session hat noch kein Transkript.
             state
-                .full(&id, path, |s| row(s, id.clone(), l.account.clone(), Some(l), place.clone()))
+                .full(&id, path, |s| {
+                    let mut r = row(s, id.clone(), l.account.clone(), Some(l), place.clone());
+                    r.topic = state.topics.topic(&id, s, Some(&l.profile_dir), true);
+                    r.title_pending = title_pending(s, &r.topic, &state.topics, &id);
+                    r
+                })
                 .unwrap_or_else(|_| row(&Stats::default(), id.clone(), l.account.clone(), Some(l), place.clone()))
         })
         .collect();
-    let recent_rows = sessions::recent_transcripts(&profiles, recent_limit + live.len())
+    let recent: Vec<_> = sessions::recent_transcripts(&profiles, recent_limit + live.len())
         .into_iter()
         .filter(|r| !live_ids.contains(r.session_id.as_str()))
         .take(recent_limit)
-        .map(|r| row(&state.tail(&r.path), r.session_id, r.account, None, None))
+        .collect();
+    let recent_paths: HashSet<PathBuf> = recent.iter().map(|r| r.path.clone()).collect();
+    let recent_rows = recent
+        .into_iter()
+        .map(|r| {
+            let stats = state.tail(&r.path);
+            let topic = state.topics.cached(&r.session_id, &stats);
+            SessionRow { topic, ..row(&stats, r.session_id, r.account, None, None) }
+        })
         .collect();
 
+    state.evict(&live_ids, &recent_paths);
     Ok(Overview { live: live_rows, recent: recent_rows, profiles, herdr_available })
 }
 
@@ -207,7 +283,9 @@ async fn session_detail(session_id: String, state: tauri::State<'_, AppState>) -
     let account = live.as_ref().map(|l| l.account.clone()).or_else(|| found.as_ref().map(|f| f.1.clone())).unwrap_or_default();
     let stats = state.full(&session_id, || found.map(|f| f.0), Stats::clone)?;
     let status = status(live.as_ref(), herdr.as_ref());
-    Ok(Detail { session_id, live, status, account, herdr, stats })
+    let topic = state.topics.cached(&session_id, &stats);
+    let title_pending = live.is_some() && title_pending(&stats, &topic, &state.topics, &session_id);
+    Ok(Detail { session_id, live, status, account, herdr, topic, title_pending, stats })
 }
 
 #[tauri::command]

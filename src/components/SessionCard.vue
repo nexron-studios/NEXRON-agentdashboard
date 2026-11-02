@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Bot, CircleCheck, CircleX, Clock, Cpu, Gauge, LoaderCircle, MessageSquareText, Sparkles, Wrench } from 'lucide-vue-next'
+import { Bot, CircleCheck, CircleX, Code, LayoutPanelTop, LoaderCircle, MessageSquareText, Sparkles, SquareTerminal, UserRound, Wrench } from 'lucide-vue-next'
 import type { SessionRow } from '../api'
-import { ago, awaitsYou, duration, headline, modelName, needsApproval, plainPrompt, tokens } from '../format'
+import { ago, awaitsYou, clock, date, duration, headline, modelName, needsApproval, PENDING_TITLE, plainPrompt, tokens } from '../format'
 import EmptySession from './EmptySession.vue'
 import FolderLink from './FolderLink.vue'
 import SessionOpen from './SessionOpen.vue'
-import SessionMeta from './SessionMeta.vue'
 import StatusBadge from './StatusBadge.vue'
+import { accountInfo } from '../store'
 
-const props = defineProps<{ session: SessionRow; now: number }>()
+// `rank`: Platz in der Fertig-Reihenfolge (1 = zuletzt fertig geworden), wie die Chips über den Karten
+const props = defineProps<{ session: SessionRow; now: number; rank?: number }>()
 const emit = defineEmits<{ open: [] }>()
 const s = computed(() => props.session)
 const waiting = computed(() => needsApproval(s.value.status))
@@ -19,6 +20,7 @@ const AGENT_ICON = { running: LoaderCircle, done: CircleCheck, failed: CircleX }
 const agentIcon = (st: string) => AGENT_ICON[st as keyof typeof AGENT_ICON] ?? CircleCheck
 const ctxPct = computed(() => (s.value.context ? Math.min(100, (s.value.context.tokens / s.value.context.window) * 100) : 0))
 const head = computed(() => headline(s.value))
+const acc = computed(() => accountInfo(s.value.account))
 // „Gestartet mit“ nur, solange die Session beim ersten Thema ist und die erste Anfrage etwas anderes sagt als die letzte
 const showFirst = computed(() => !head.value.switched && s.value.firstPrompt && s.value.firstPrompt !== s.value.lastPrompt)
 // Stammt die Überschrift aus der letzten Anfrage, nicht noch einmal darunter wiederholen (voller Text in der Detailansicht)
@@ -36,54 +38,89 @@ const action = computed(() => {
 </script>
 
 <template>
+  <!-- Jede Karte gleich aufgebaut, damit Reihen ruhig wirken: Kopf (wer + Status), Titel mit einer
+       Infozeile, Inhalt, und unten immer an derselben Stelle die beiden Buttons (Ordner, Zum Chat). -->
   <article
     class="card press group relative flex flex-col p-5 hover:border-line-strong hover:bg-surface-2/60"
     :class="{ 'border-critical/50!': waiting, 'border-good/35!': yourTurn }"
   >
-    <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-      <StatusBadge :status="s.status" :fresh="fresh" />
-      <span v-if="s.lastT" class="ml-auto flex shrink-0 items-center gap-1.5 text-[13px] whitespace-nowrap text-ink-3">
-        <Clock :size="14" :stroke-width="1.75" /> {{ ago(s.lastT, now) }}
-      </span>
+    <div class="flex items-center gap-3">
+      <div class="flex min-w-0 flex-1 items-center gap-2.5 text-[14px]">
+        <span
+          class="flex min-w-0 shrink-0 items-center gap-1.5"
+          :title="s.herdr ? `herdr: Workspace „${s.herdr.workspace}“, Tab „${s.herdr.tab}“` : 'Name aus der Claude-Session (nicht in herdr gefunden)'"
+        >
+          <component :is="s.herdr ? LayoutPanelTop : SquareTerminal" :size="15" :stroke-width="2" class="shrink-0 text-ink-3" />
+          <span class="truncate">
+            <span v-if="s.herdr?.workspace" class="text-ink-3">{{ s.herdr.workspace }} › </span>
+            <span class="font-semibold text-ink">{{ s.herdr?.tab || s.name || 'Session' }}</span>
+          </span>
+        </span>
+        <span v-if="s.account" class="flex min-w-0 items-center gap-1 text-[13px] text-ink-3" :title="acc.email ? `Claude-Account: ${acc.email}` : 'Claude-Profil'">
+          <UserRound :size="13" :stroke-width="2" class="shrink-0" :style="{ color: acc.color }" /> <span class="truncate">{{ s.account }}</span>
+        </span>
+        <span v-if="s.entrypoint === 'claude-vscode'" class="flex min-w-0 items-center gap-1 text-[13px] text-ink-3" title="Läuft in VS Code">
+          <Code :size="13" :stroke-width="2" class="shrink-0" /> <span class="truncate">VS Code</span>
+        </span>
+      </div>
+      <StatusBadge :status="s.status" :fresh="fresh" size="sm" />
     </div>
 
-    <!-- Öffnen sitzt in der Zeile mit herdr-Tab und Account, damit die Statuszeile nicht umbricht -->
-    <div class="mt-3.5 flex items-start gap-2">
-      <SessionMeta class="min-w-0 flex-1" :herdr="s.herdr" :account="s.account" :entrypoint="s.entrypoint" :name="s.name" />
-      <SessionOpen v-if="s.live" :herdr="s.herdr" :pid="s.pid" :cwd="s.cwd" :entrypoint="s.entrypoint" />
-    </div>
-
-    <h3 class="mt-3 line-clamp-2 text-[18px] leading-snug font-semibold tracking-tight" :class="{ 'text-ink-3': fresh }">
+    <h3 class="mt-4 line-clamp-2 text-[17px] leading-snug font-semibold tracking-tight" :class="{ 'text-ink-3': fresh || head.pending }">
       <button class="card-link text-left" @click="emit('open')">
-        {{ fresh ? 'Neue Session' : head.text }}
+        {{ fresh ? 'Neue Session' : head.pending ? PENDING_TITLE : head.text }}
       </button>
     </h3>
+
+    <!-- Eine ruhige Infozeile statt einzelner Chips -->
+    <p class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-ink-3">
+      <template v-if="yourTurn && s.finishedAt">
+        <span class="flex items-center gap-1.5 font-semibold text-good" :title="`Fertig geworden ${date(s.finishedAt)}`">
+          <span
+            v-if="rank"
+            class="num grid h-4.5 min-w-4.5 place-items-center rounded-full px-1 text-[11px] font-bold"
+            :class="rank === 1 ? 'bg-good text-app' : 'bg-surface-3 text-ink-2'"
+            :title="`Platz ${rank} der fertigen Sessions`"
+          >{{ rank }}</span>
+          fertig {{ clock(s.finishedAt, now) }}
+        </span>
+        <span>{{ ago(s.finishedAt, now) }}</span>
+      </template>
+      <span v-else-if="s.lastT">{{ fresh ? 'gestartet' : 'aktiv' }} {{ ago(s.lastT, now) }}</span>
+      <template v-if="s.prompts">
+        <span aria-hidden="true">·</span>
+        <span>{{ s.prompts }} {{ s.prompts === 1 ? 'Anfrage' : 'Anfragen' }}</span>
+      </template>
+      <template v-if="s.context">
+        <span aria-hidden="true">·</span>
+        <span title="Modell der letzten Antwort">{{ modelName(s.lastModel) }}</span>
+        <span class="flex items-center gap-1.5" :title="`${s.context.tokens.toLocaleString('de-DE')} von ${s.context.window.toLocaleString('de-DE')} Tokens im Kontext`">
+          <span class="h-1.5 w-10 overflow-hidden rounded-full bg-surface-3">
+            <span class="bar-grow block h-full rounded-full" :class="ctxPct > 85 ? 'bg-warning' : 'bg-series-1'" :style="{ width: ctxPct + '%' }" />
+          </span>
+          <span class="num">{{ tokens(s.context.tokens) }}</span>
+        </span>
+      </template>
+    </p>
     <p v-if="!fresh && head.startedAs" class="mt-1 truncate text-[13px] text-ink-3" :title="`Titel von Claude Code: ${head.startedAs}`">
       Gestartet als „{{ head.startedAs }}“
     </p>
 
-    <div class="mt-2 flex flex-wrap items-center gap-2 text-[13px]">
-      <FolderLink :path="s.cwd" class="group-hover:bg-surface-3" />
-      <span v-if="s.prompts" class="flex items-center gap-1.5 px-1 py-0.5 text-ink-3">
-        <MessageSquareText :size="14" :stroke-width="1.75" /> {{ s.prompts }} {{ s.prompts === 1 ? 'Anfrage' : 'Anfragen' }}
-      </span>
-    </div>
-
     <EmptySession v-if="fresh" :vscode="s.entrypoint === 'claude-vscode'" />
 
-    <div v-else class="mt-4 space-y-3 border-t border-line pt-4">
+    <div v-else class="mt-4 space-y-2.5 border-t border-line pt-4">
       <div v-if="showFirst" class="flex gap-2.5 text-[14px]">
         <Sparkles :size="16" :stroke-width="1.75" class="mt-0.5 shrink-0 text-ink-3" />
         <p class="line-clamp-2 text-ink-3" :title="s.firstPrompt">
           <span class="font-medium text-ink-2">Gestartet mit:</span> {{ s.firstPrompt }}
         </p>
       </div>
-      <div v-if="showLast" class="flex gap-2.5 text-[14.5px]">
-        <MessageSquareText :size="16" :stroke-width="1.75" class="mt-1 shrink-0 text-brand" />
-        <p class="line-clamp-4 whitespace-pre-line text-ink" :title="s.lastPrompt">{{ s.lastPrompt }}</p>
+      <div v-if="showLast" class="flex gap-2.5 text-[14px]">
+        <MessageSquareText :size="16" :stroke-width="1.75" class="mt-0.5 shrink-0 text-ink-3" />
+        <p class="line-clamp-3 whitespace-pre-line text-ink" :title="s.lastPrompt">{{ s.lastPrompt }}</p>
       </div>
       <div v-if="s.lastAction" class="flex gap-2.5 text-[13px]" :class="waiting ? 'text-ink' : 'text-ink-3'">
-        <component :is="action.said ? Bot : Wrench" :size="15" :stroke-width="1.75" class="mt-0.5 shrink-0" :class="{ 'text-critical': waiting }" />
+        <component :is="action.said ? Bot : Wrench" :size="16" :stroke-width="1.75" class="mt-px shrink-0" :class="{ 'text-critical': waiting }" />
         <p class="line-clamp-2 [overflow-wrap:anywhere]" :title="action.text">
           <span v-if="waiting" class="font-semibold text-critical">Fragt nach: </span>
           <span v-else-if="action.said" class="font-medium text-ink-2">Claude: </span>{{ action.text }}
@@ -113,15 +150,9 @@ const action = computed(() => {
       </ul>
     </div>
 
-    <div v-if="s.context" class="mt-auto flex items-center gap-4 pt-5 text-[13px] text-ink-3">
-      <span class="flex items-center gap-1.5" title="Modell der letzten Antwort"><Cpu :size="14" :stroke-width="1.75" /> {{ modelName(s.lastModel) }}</span>
-      <span class="flex flex-1 items-center gap-2.5" :title="`${s.context.tokens.toLocaleString('de-DE')} von ${s.context.window.toLocaleString('de-DE')} Tokens im Kontext`">
-        <Gauge :size="14" :stroke-width="1.75" />
-        <span class="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-3">
-          <span class="bar-grow block h-full rounded-full" :class="ctxPct > 85 ? 'bg-warning' : 'bg-series-1'" :style="{ width: ctxPct + '%' }" />
-        </span>
-        <span class="num">{{ tokens(s.context.tokens) }} / {{ tokens(s.context.window) }}</span>
-      </span>
+    <div class="mt-auto flex items-center gap-2 pt-5">
+      <FolderLink :path="s.cwd" class="min-w-0" />
+      <SessionOpen v-if="s.live" class="ml-auto" :herdr="s.herdr" :pid="s.pid" :cwd="s.cwd" :entrypoint="s.entrypoint" />
     </div>
   </article>
 </template>

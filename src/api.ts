@@ -36,11 +36,17 @@ export interface SessionRow {
   firstPrompt: string
   currentTask: string
   currentTaskIsFirst: boolean
+  /** Von Haiku formulierter Titel des aktuellen Themas; leer, solange Claudes Titel noch passt */
+  topic: string
+  /** Ein Titel ist unterwegs (Claudes eigener oder ein Thema von Haiku) */
+  titlePending: boolean
   lastPrompt: string
   prompts: number
   lastAction: string
   lastModel: string
   lastT: number
+  /** Wann Claude mit der letzten Aufgabe fertig wurde (ms); nur aussagekräftig bei idle/done */
+  finishedAt: number
   context: Context | null
   agents: AgentRun[]
   agentsTotal: number
@@ -134,6 +140,7 @@ export interface LiveSession {
   cwd: string | null
   name: string | null
   status: string | null
+  statusUpdatedAt: number | null
   entrypoint: string | null
   account: string
   startedAt: number | null
@@ -145,6 +152,8 @@ export interface Detail {
   status: string
   account: string
   herdr: HerdrPlace | null
+  topic: string
+  titlePending: boolean
   stats: Stats
 }
 

@@ -20,15 +20,15 @@ async function open() {
 
 <template>
   <button
-    class="press folder-link relative z-10 flex items-center gap-1.5 rounded-md bg-surface-2 px-2 py-0.5 font-medium text-ink-2 hover:bg-surface-3 hover:text-ink"
+    class="press folder-link relative z-10 flex items-center gap-1.5 rounded-lg border border-line-strong bg-surface-2 px-2.5 py-[5px] text-[13px] font-medium text-ink-2 hover:border-ink-3 hover:bg-surface-3 hover:text-ink"
     :class="{ 'text-critical!': failed }"
     :title="failed || `${path}\nIm Explorer öffnen`"
     @click.stop="open"
   >
-    <span class="relative inline-flex" :style="{ width: `${size ?? 14}px`, height: `${size ?? 14}px` }">
-      <Folder :size="size ?? 14" :stroke-width="1.75" class="folder-closed absolute" />
-      <FolderOpen :size="size ?? 14" :stroke-width="1.75" class="folder-open absolute" />
+    <span class="relative inline-flex shrink-0" :style="{ width: `${size ?? 14}px`, height: `${size ?? 14}px` }">
+      <Folder :size="size ?? 14" :stroke-width="1.75" class="folder-closed absolute text-series-1" />
+      <FolderOpen :size="size ?? 14" :stroke-width="1.75" class="folder-open absolute text-series-1" />
     </span>
-    {{ projectName(path) }}
+    <span class="truncate">{{ projectName(path) }}</span>
   </button>
 </template>

@@ -33,6 +33,6 @@ const state = computed(() => {
     <span class="relative inline-flex" :class="{ attention: state === STATES.blocked }">
       <component :is="state.icon" :size="size === 'sm' ? 13 : 15" :stroke-width="2.25" :class="{ spin: state === STATES.busy }" />
     </span>
-    {{ state.label }}
+    {{ size === 'sm' && state === STATES.waiting ? 'Fertig' : state.label }}
   </span>
 </template>

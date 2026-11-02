@@ -16,9 +16,9 @@ import {
   Wrench,
 } from 'lucide-vue-next'
 import { fetchDetail, type Detail } from '../api'
-import { date, duration, modelName, time, tokens, usd, usePolling } from '../format'
+import { date, duration, headline, modelName, time, tokens, usd, usePolling } from '../format'
 import FolderLink from './FolderLink.vue'
-import HerdrOpen from './HerdrOpen.vue'
+import SessionOpen from './SessionOpen.vue'
 import SessionMeta from './SessionMeta.vue'
 import StatusBadge from './StatusBadge.vue'
 import Timeline from './Timeline.vue'
@@ -110,9 +110,16 @@ const errors = computed(() => [...(s.value?.errors ?? [])].reverse().slice(0, 40
         <div class="flex flex-wrap items-center gap-3">
           <StatusBadge :status="status" :fresh="!s.prompts" />
           <SessionMeta size="lg" :herdr="detail.herdr" :account="detail.account" :entrypoint="detail.live?.entrypoint ?? ''" :name="detail.live?.name ?? ''" />
-          <HerdrOpen v-if="detail.herdr" :herdr="detail.herdr" />
+          <SessionOpen
+            v-if="detail.live"
+            :herdr="detail.herdr"
+            :pid="detail.live.pid"
+            :cwd="detail.live.cwd ?? s.cwd"
+            :entrypoint="detail.live.entrypoint ?? ''"
+          />
         </div>
-        <h1 class="mt-3 text-[28px] leading-tight font-semibold tracking-tight">{{ s.title || s.firstPrompt || sessionId.slice(0, 8) }}</h1>
+        <h1 class="mt-3 text-[28px] leading-tight font-semibold tracking-tight">{{ headline(s).text || sessionId.slice(0, 8) }}</h1>
+        <p v-if="headline(s).startedAs" class="mt-1 text-[14px] text-ink-3">Gestartet als „{{ headline(s).startedAs }}“</p>
         <div class="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-[14px] text-ink-2">
           <FolderLink :path="s.cwd" :size="16" />
           <span v-if="s.gitBranch && s.gitBranch !== 'HEAD'" class="flex items-center gap-1.5"><GitBranch :size="16" :stroke-width="1.75" class="text-ink-3" /> {{ s.gitBranch }}</span>

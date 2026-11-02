@@ -34,6 +34,8 @@ export interface SessionRow {
   startedAt: number
   title: string
   firstPrompt: string
+  currentTask: string
+  currentTaskIsFirst: boolean
   lastPrompt: string
   prompts: number
   lastAction: string
@@ -99,6 +101,8 @@ export interface Prompt {
 export interface Stats {
   title: string
   firstPrompt: string
+  currentTask: string
+  currentTaskIsFirst: boolean
   lastPrompt: string
   lastAction: string
   lastModel: string
@@ -148,3 +152,5 @@ export const fetchOverview = (recentLimit: number) => invoke<Overview>('overview
 export const fetchDetail = (sessionId: string) => invoke<Detail>('session_detail', { sessionId })
 export const focusHerdr = (tabId: string) => invoke<void>('focus_herdr', { tabId })
 export const openFolder = (path: string) => invoke<void>('open_folder', { path })
+export const openSession = (pid: number | null, cwd: string, entrypoint: string) =>
+  invoke<void>('open_session', { pid, cwd, entrypoint })

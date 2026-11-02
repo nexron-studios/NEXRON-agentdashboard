@@ -93,3 +93,17 @@ export function usePolling(task: () => Promise<void>, ms: number): { now: Ref<nu
   })
   return { now }
 }
+
+/**
+ * Überschrift einer Session. Claude Code vergibt den Titel nur einmal am Anfang; ist die Arbeit
+ * seitdem zu einem anderen Thema gewandert, wird das aktuelle Thema zur Überschrift und der Titel
+ * rückt als „Gestartet als“ darunter.
+ */
+export function headline(s: { title: string; currentTask: string; currentTaskIsFirst: boolean; firstPrompt: string }) {
+  const switched = !!s.currentTask && !s.currentTaskIsFirst
+  if (switched) return { text: s.currentTask, startedAs: s.title || s.firstPrompt, switched }
+  return { text: s.title || s.currentTask || s.firstPrompt, startedAs: '', switched }
+}
+
+/** Anfrage ohne Bild-Platzhalter und überzählige Leerzeichen, zum Vergleichen */
+export const plainPrompt = (t: string) => t.replace(/\[(Image|Pasted)[^\]]*\]/g, '').replace(/\s+/g, ' ').trim()

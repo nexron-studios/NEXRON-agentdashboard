@@ -1,4 +1,6 @@
 @import 'tailwindcss';
+/* Ein-/Ausblenden der shadcn-Tooltips (animate-in, fade-in-0, zoom-in-95 …) */
+@import 'tw-animate-css';
 
 /* Dunkle Oberfläche und Datenfarben aus der validierten Dataviz-Palette (Dark-Stufen). */
 @theme {

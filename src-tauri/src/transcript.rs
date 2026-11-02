@@ -94,6 +94,11 @@ pub struct Stats {
     pub title: String,
     /// Die erste eigene Anfrage: sagt meist am besten, worum es in der Session geht.
     pub first_prompt: String,
+    /// Aktuelles Thema: die letzte Anfrage mit Inhalt, bereinigt und auf einen Satz gekürzt.
+    /// Claude Code vergibt den Titel nur einmal; wer im selben Chat weiterarbeitet, braucht das hier.
+    pub current_task: String,
+    /// Das aktuelle Thema stammt noch aus der ersten Anfrage, der Titel passt also noch.
+    pub current_task_is_first: bool,
     pub last_prompt: String,
     pub last_action: String,
     pub last_model: String,
@@ -389,6 +394,10 @@ impl Transcript {
         if s.first_prompt.is_empty() {
             s.first_prompt = full.clone();
         }
+        if let Some(task) = task_of(text) {
+            s.current_task = task;
+            s.current_task_is_first = s.prompts == 1;
+        }
         s.events.push(Event { t, kind: "prompt", label: cut(&one_line(text), 160), sidechain: false });
         s.prompt_log.push(Prompt { t, text: full });
     }
@@ -400,6 +409,49 @@ impl Transcript {
         s.events.push(Event { t, kind: "error", label: source.clone(), sidechain });
         s.errors.push(ErrorItem { t, source, message });
     }
+}
+
+/// Macht aus einer Anfrage eine Überschrift, oder `None`, wenn sie kein Thema trägt („ja“, „weiter“, nur ein Bild).
+fn task_of(text: &str) -> Option<String> {
+    // Platzhalter für eingefügte Bilder und Texte entfernen: [Image #3], [Pasted text #1 +20 lines]
+    let mut clean = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(start) = rest.find('[') {
+        clean.push_str(&rest[..start]);
+        let after = &rest[start..];
+        match after.find(']') {
+            Some(end) if after.starts_with("[Image") || after.starts_with("[Pasted") => rest = &after[end + 1..],
+            _ => {
+                clean.push('[');
+                rest = &after[1..];
+            }
+        }
+    }
+    clean.push_str(rest);
+    let clean = clean.split_whitespace().collect::<Vec<_>>().join(" ");
+    let clean = clean.trim_start_matches(['-', '>', '+', ' ']).trim();
+    if clean.chars().count() < 20 || clean.split(' ').count() < 4 {
+        return None;
+    }
+    // Erster Satz, wenn er lang genug ist; sonst die ersten 120 Zeichen
+    let sentence_end = clean
+        .char_indices()
+        .skip(25)
+        .find(|&(i, c)| matches!(c, '.' | '?' | '!') && clean[i + c.len_utf8()..].starts_with(' '))
+        .map(|(i, c)| i + c.len_utf8());
+    let sentence = sentence_end.map_or(clean, |end| &clean[..end]);
+    let mut out = cut_words(sentence, 90);
+    if let Some(first) = out.chars().next() {
+        out = first.to_uppercase().collect::<String>() + &out[first.len_utf8()..];
+    }
+    Some(out)
+}
+
+/// Kürzt an der letzten Wortgrenze vor `max_chars`, damit kein Wort mitten abbricht.
+fn cut_words(text: &str, max_chars: usize) -> String {
+    let Some((limit, _)) = text.char_indices().nth(max_chars) else { return text.to_string() };
+    let end = text[..limit].rfind(' ').filter(|&i| i > limit / 2).unwrap_or(limit);
+    format!("{}…", text[..end].trim_end_matches([',', ';', ':', ' ']))
 }
 
 fn parse_time(s: &str) -> Option<i64> {
@@ -529,6 +581,23 @@ mod tests {
         println!("{:?} | prompts {} turns {} tools {} errors {} agents {} events {}", s.title, s.prompts, s.turns, s.tool_calls, s.error_count, s.agents.len(), s.events.len());
         println!("models {:?}\ncontext {:?}\ncost {:?}", s.models, s.context, s.cost.as_ref().map(|c| c.total_usd));
         println!("agents {:?}", s.agents.iter().map(|a| (&a.description, &a.status, &a.model)).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn current_task_skips_short_replies_and_placeholders() {
+        assert_eq!(task_of("ja"), None);
+        assert_eq!(cut_words("eins zwei drei vier", 12), "eins zwei…");
+        assert_eq!(task_of("[Image #4] weiter"), None);
+        assert_eq!(
+            task_of("[Image #3] dieser erste bereich macht iwann keinen sinn mehr. checkst du den kontext?").as_deref(),
+            Some("Dieser erste bereich macht iwann keinen sinn mehr.")
+        );
+        let mut t = Transcript::default();
+        let prompt = |text: &str| json!({"type": "user", "timestamp": "2026-11-02T10:00:00Z", "message": {"content": text}});
+        t.ingest(&lines(&[prompt("bau mir bitte ein login formular"), prompt("ok")]));
+        assert_eq!((t.stats.current_task.as_str(), t.stats.current_task_is_first), ("Bau mir bitte ein login formular", true));
+        t.ingest(&lines(&[prompt("jetzt etwas ganz anderes: das dashboard sortieren")]));
+        assert_eq!((t.stats.current_task.as_str(), t.stats.current_task_is_first), ("Jetzt etwas ganz anderes: das dashboard sortieren", false));
     }
 
     #[test]

@@ -1,6 +1,7 @@
 mod herdr;
 mod sessions;
 mod transcript;
+mod window;
 
 use herdr::{HerdrCache, HerdrPlace};
 use serde::Serialize;
@@ -42,6 +43,8 @@ struct SessionRow {
     started_at: i64,
     title: String,
     first_prompt: String,
+    current_task: String,
+    current_task_is_first: bool,
     last_prompt: String,
     prompts: u32,
     last_action: String,
@@ -151,6 +154,8 @@ fn row(stats: &Stats, session_id: String, account: String, live: Option<&LiveSes
         session_id,
         title: stats.title.clone(),
         first_prompt: stats.first_prompt.clone(),
+        current_task: stats.current_task.clone(),
+        current_task_is_first: stats.current_task_is_first,
         last_prompt: stats.last_prompt.clone(),
         prompts: stats.prompts,
         last_action: stats.last_action.clone(),
@@ -228,11 +233,69 @@ async fn open_folder(path: String) -> Result<(), String> {
         .map_err(|e| format!("Explorer ließ sich nicht öffnen: {e}"))
 }
 
+/// „Öffnen“ für Sessions ohne herdr-Tab. VS Code: `code <ordner>` holt genau das Fenster mit diesem
+/// Projekt nach vorne (alle VS-Code-Fenster gehören demselben Prozess, das Fenster ließe sich sonst
+/// nicht unterscheiden). Sonst das Terminal-Fenster, in dem der Claude-Prozess läuft.
+#[tauri::command]
+async fn open_session(pid: Option<u32>, cwd: String, entrypoint: String) -> Result<(), String> {
+    if entrypoint == "claude-vscode" {
+        let dir = PathBuf::from(if cfg!(windows) { cwd.replace('/', "\\") } else { cwd });
+        if dir.is_dir() {
+            let mut cmd = std::process::Command::new(if cfg!(windows) { "code.cmd" } else { "code" });
+            cmd.arg(&dir);
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+                cmd.creation_flags(CREATE_NO_WINDOW);
+            }
+            if cmd.spawn().is_ok() {
+                return Ok(());
+            }
+        }
+    }
+    window::focus_process_window(pid.ok_or("Keine Prozess-ID für diese Session")?)
+}
+
+/// Startgröße passend zum Bildschirm: Eine feste Größe ist auf einem Monitor zu klein und auf
+/// dem nächsten (z. B. 1080p mit 150 % Skalierung) größer als der Bildschirm. Das Fenster füllt
+/// den Arbeitsbereich bis auf einen schmalen Rand, höchstens so breit wie der Inhalt (1680 px)
+/// und so hoch, dass sechs Karten ohne Scrollen passen, und steht mittig. Es ist bis hierhin
+/// unsichtbar (tauri.conf.json), damit es nicht erst in der Standardgröße aufblitzt.
+fn fit_to_monitor(win: &tauri::WebviewWindow) {
+    const MAX_W: f64 = 1700.0;
+    const MAX_H: f64 = 1120.0;
+    const MARGIN: f64 = 16.0;
+    let monitor = win.current_monitor().ok().flatten().or_else(|| win.primary_monitor().ok().flatten());
+    if let (Some(m), Ok(outer), Ok(inner)) = (monitor, win.outer_size(), win.inner_size()) {
+        let scale = m.scale_factor();
+        let area = m.work_area();
+        // Rahmen und Titelleiste gehören zur Außengröße, set_size setzt die Innengröße
+        let frame_w = outer.width.saturating_sub(inner.width) as f64;
+        let frame_h = outer.height.saturating_sub(inner.height) as f64;
+        let w = (MAX_W * scale + frame_w).min(area.size.width as f64 - 2.0 * MARGIN * scale);
+        let h = (MAX_H * scale + frame_h).min(area.size.height as f64 - 2.0 * MARGIN * scale);
+        let x = area.position.x as f64 + (area.size.width as f64 - w) / 2.0;
+        let y = area.position.y as f64 + (area.size.height as f64 - h) / 2.0;
+        let _ = win.set_size(tauri::PhysicalSize::new((w - frame_w).round() as u32, (h - frame_h).round() as u32));
+        let _ = win.show();
+        let _ = win.set_position(tauri::PhysicalPosition::new(x.round() as i32, y.round() as i32));
+    }
+    let _ = win.show();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .setup(|app| {
+            use tauri::Manager;
+            if let Some(win) = app.get_webview_window("main") {
+                fit_to_monitor(&win);
+            }
+            Ok(())
+        })
         .manage(AppState::default())
-        .invoke_handler(tauri::generate_handler![overview, session_detail, focus_herdr, open_folder])
+        .invoke_handler(tauri::generate_handler![overview, session_detail, focus_herdr, open_folder, open_session])
         .run(tauri::generate_context!())
         .expect("Agent Dashboard konnte nicht starten");
 }

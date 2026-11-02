@@ -8,6 +8,7 @@ import ClawdLogo from './components/ClawdLogo.vue'
 import NexronLogo from './components/NexronLogo.vue'
 import SessionList from './components/SessionList.vue'
 import SessionDetail from './components/SessionDetail.vue'
+import TitleTooltips from './components/TitleTooltips.vue'
 
 const RECENT = 40
 
@@ -96,5 +97,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         <SessionList v-else :overview="overview" :error="error" :now="now" @select="selected = $event" />
       </Transition>
     </main>
+    <TitleTooltips />
   </div>
 </template>

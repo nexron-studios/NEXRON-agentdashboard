@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { ChevronDown, History, Radio, Search, TriangleAlert, UserRound } from 'lucide-vue-next'
 import type { Overview, SessionRow } from '../api'
-import { byTab, dayLabel, projectName, time } from '../format'
+import { byTab, dayLabel, headline, projectName, time } from '../format'
 import { accountInfo } from '../store'
 import SessionCard from './SessionCard.vue'
 
@@ -22,7 +22,7 @@ const filtered = computed(() => {
   const q = query.value.trim().toLowerCase()
   const all = props.overview?.recent ?? []
   if (!q) return all
-  return all.filter((s) => [s.title, s.cwd, s.firstPrompt, s.lastPrompt].some((f) => f.toLowerCase().includes(q)))
+  return all.filter((s) => [s.title, s.cwd, s.firstPrompt, s.currentTask, s.lastPrompt].some((f) => f.toLowerCase().includes(q)))
 })
 const shown = computed(() => (expanded.value || query.value ? filtered.value : filtered.value.slice(0, COLLAPSED)))
 const groups = computed(() => {
@@ -105,7 +105,7 @@ const groups = computed(() => {
           >
             <span class="num w-12 shrink-0 text-[13px] text-ink-3">{{ time(s.lastT) }}</span>
             <span class="min-w-0 flex-1">
-              <span class="block truncate font-medium">{{ s.title || s.firstPrompt || 'Ohne Titel' }}</span>
+              <span class="block truncate font-medium">{{ headline(s).text || 'Ohne Titel' }}</span>
               <span class="block truncate text-[13px] text-ink-3" :title="s.firstPrompt">{{ s.firstPrompt }}</span>
             </span>
             <span class="max-w-[30%] shrink-0 truncate rounded-md bg-surface-2 px-2 py-0.5 font-mono text-[12px] text-ink-2" :title="s.cwd">

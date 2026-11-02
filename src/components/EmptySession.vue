@@ -94,7 +94,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="relative mt-4 flex flex-1 flex-col items-center justify-center gap-3 overflow-hidden rounded-xl border border-dashed border-line-strong/70 px-5 py-5 text-center">
+  <div class="empty relative mt-4 flex min-h-[140px] flex-1 flex-col items-center justify-center gap-3 overflow-hidden rounded-xl border border-dashed border-line-strong/70 px-5 py-5 text-center">
+    <!-- Größen-Container: zählt nicht zur Mindesthöhe der Karte, sondern füllt nur den Platz, den die
+         Kartenreihe hergibt. Sonst bestimmt eine leere Karte die Höhe der ganzen Reihe. -->
     <!-- Warmer Schein hinter Clawd, nach außen ganz weg -->
     <div aria-hidden="true" class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_32%,color-mix(in_oklab,var(--color-brand)_14%,transparent),transparent_55%)]" />
     <!-- Feines Punktraster, zur Mitte hin sichtbar -->
@@ -111,15 +113,32 @@ onBeforeUnmount(() => {
 
     <div class="relative space-y-0.5">
       <p class="text-[14px] font-semibold text-ink-2">Clawd wartet auf die erste Anfrage</p>
-      <p class="mx-auto max-w-[36ch] text-[12.5px] text-balance text-ink-3">
+      <p class="empty-hint mx-auto max-w-[36ch] text-[12.5px] text-balance text-ink-3">
         Sobald du {{ vscode ? 'in VS Code' : 'im Terminal' }} loslegst, stehen hier Anfrage, Schritte und Kontext.
       </p>
     </div>
 
-    <div class="relative flex w-full max-w-[220px] items-center gap-2 rounded-md border border-line-strong bg-app/60 px-2.5 py-1 font-mono text-[12px] text-ink-3">
+    <div class="empty-cmd relative flex w-full max-w-[220px] items-center gap-2 rounded-md border border-line-strong bg-app/60 px-2.5 py-1 font-mono text-[12px] text-ink-3">
       <span class="w-[1ch] shrink-0" :class="shell ? 'text-series-7' : 'text-brand'">{{ shell ? '!' : '>' }}</span>
       <span class="-mr-1 truncate whitespace-pre text-ink-2" aria-hidden="true">{{ typed }}</span>
       <span class="h-3.5 w-[6px] shrink-0 rounded-[1px] bg-ink-2" :class="{ 'caret-blink': !typed }" aria-hidden="true" />
     </div>
   </div>
 </template>
+
+<style scoped>
+.empty {
+  container-type: size;
+}
+/* Wenig Platz: erst der Hinweistext weg, dann die Eingabezeile; Clawd und die Überschrift bleiben */
+@container (max-height: 236px) {
+  .empty-hint {
+    display: none;
+  }
+}
+@container (max-height: 178px) {
+  .empty-cmd {
+    display: none;
+  }
+}
+</style>

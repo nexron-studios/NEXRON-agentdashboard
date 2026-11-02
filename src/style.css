@@ -1,0 +1,343 @@
+@import 'tailwindcss';
+
+/* Dunkle Oberfläche und Datenfarben aus der validierten Dataviz-Palette (Dark-Stufen). */
+@theme {
+  --color-app: #0e0e0f;
+  --color-surface: #19191a;
+  --color-surface-2: #222223;
+  --color-surface-3: #2b2b2c;
+  --color-line: #2c2c2d;
+  --color-line-strong: #3a3a3b;
+  --color-ink: #f0efec;
+  --color-ink-2: #c3c2b7;
+  --color-ink-3: #8e8d84;
+  --color-brand: #d97757;
+
+  --color-series-1: #3987e5;
+  --color-series-2: #d95926;
+  --color-series-3: #199e70;
+  --color-series-4: #c98500;
+  --color-series-7: #9085e9;
+
+  --color-good: #0ca30c;
+  --color-warning: #fab219;
+  --color-critical: #e05252;
+
+  --font-sans: 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+  --font-display: 'Segoe UI Variable Display', 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'Cascadia Code', 'Cascadia Mono', Consolas, monospace;
+
+  --ease-out-soft: cubic-bezier(0.2, 0, 0, 1);
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-app);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  color-scheme: dark;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  text-wrap: balance;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-series-1);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+::-webkit-scrollbar-thumb {
+  background: #3a3a37;
+  border-radius: 6px;
+  border: 3px solid var(--color-app);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Karten mit Schatten für Höhe, Rand für Struktur. */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: 14px;
+  box-shadow:
+    0 1px 0 0 rgb(255 255 255 / 0.03) inset,
+    0 8px 24px -12px rgb(0 0 0 / 0.6);
+}
+
+/* Bewegung nur, wenn das System sie nicht reduziert; sonst nur Überblenden. */
+@media (prefers-reduced-motion: no-preference) {
+  .enter {
+    animation: enter 300ms var(--ease-out-soft) both;
+    animation-delay: calc(min(var(--i, 0), 8) * 60ms);
+  }
+  .press {
+    transition-property: scale, background-color, border-color;
+    transition-duration: 150ms;
+    transition-timing-function: ease-out;
+  }
+  .press:not(:disabled):active {
+    scale: 0.98;
+  }
+  .spin {
+    animation: spin 1.1s linear infinite;
+  }
+  .attention::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 999px;
+    border: 2px solid var(--color-critical);
+    animation: ring 1.8s ease-out infinite;
+  }
+  .bar-grow {
+    transition: width 400ms var(--ease-out-soft);
+  }
+
+  /* Animierte Icons */
+  /* Clawd hüpft alle paar Sekunden kurz */
+  .clawd-hop {
+    animation: hop 4s var(--ease-out-soft) infinite;
+  }
+  /* Funk-Icon „Laufende Sessions“ sendet */
+  .radio-pulse {
+    animation: broadcast 2.2s ease-in-out infinite;
+  }
+  /* Grüner Live-Punkt mit Ring, der wegläuft */
+  .live-ping::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    background: inherit;
+    animation: ping 2s ease-out infinite;
+  }
+  /* Freigabe nötig: Ausrufezeichen wackelt */
+  .wiggle {
+    animation: wiggle 2.4s ease-in-out infinite;
+  }
+  /* Jemand wartet auf dich: Haken schlägt wie ein Herz */
+  .beat {
+    animation: beat 2.4s ease-in-out infinite;
+  }
+  /* Ordner-Chip: geschlossener Ordner klappt beim Hover auf (Wechsel selbst steht unten) */
+  .folder-link :is(.folder-closed, .folder-open) {
+    transition:
+      opacity 200ms ease-out,
+      scale 200ms var(--ease-out-soft);
+  }
+  .folder-link .folder-open,
+  .folder-link:hover .folder-closed {
+    scale: 0.6;
+  }
+  .folder-link:hover .folder-open {
+    scale: 1.12;
+  }
+  /* Leere Session: Cursor in der Eingabezeile blinkt */
+  .caret-blink {
+    animation: blink 1.1s steps(1) infinite;
+  }
+  /* „Zuletzt“: Uhr dreht beim Hover einmal zurück */
+  .history-rewind {
+    transition: rotate 600ms var(--ease-out-soft);
+  }
+  h2:hover .history-rewind {
+    rotate: -360deg;
+  }
+}
+/* Ordner-Chip: zu ↔ offen, auch ohne Animation */
+.folder-link .folder-open,
+.folder-link:hover .folder-closed {
+  opacity: 0;
+}
+.folder-link:hover .folder-open {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .enter {
+    animation: fade 200ms ease-out both;
+  }
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    filter: blur(4px);
+    translate: 0 12px;
+  }
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes spin {
+  to {
+    rotate: 360deg;
+  }
+}
+@keyframes hop {
+  0%,
+  80%,
+  100% {
+    translate: 0 0;
+  }
+  86% {
+    translate: 0 -4px;
+  }
+  92% {
+    translate: 0 0;
+  }
+  95% {
+    translate: 0 -1.5px;
+  }
+}
+@keyframes broadcast {
+  0%,
+  100% {
+    opacity: 1;
+    scale: 1;
+  }
+  50% {
+    opacity: 0.55;
+    scale: 0.88;
+  }
+}
+@keyframes ping {
+  from {
+    opacity: 0.7;
+    scale: 1;
+  }
+  to {
+    opacity: 0;
+    scale: 2.8;
+  }
+}
+@keyframes wiggle {
+  0%,
+  60%,
+  100% {
+    rotate: 0deg;
+  }
+  66% {
+    rotate: -14deg;
+  }
+  74% {
+    rotate: 12deg;
+  }
+  82% {
+    rotate: -8deg;
+  }
+  90% {
+    rotate: 4deg;
+  }
+}
+@keyframes beat {
+  0%,
+  70%,
+  100% {
+    scale: 1;
+  }
+  78% {
+    scale: 1.25;
+  }
+  86% {
+    scale: 0.95;
+  }
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+@keyframes ring {
+  from {
+    opacity: 0.7;
+    scale: 1;
+  }
+  to {
+    opacity: 0;
+    scale: 1.7;
+  }
+}
+
+/* Ansichtswechsel Übersicht ↔ Detail */
+.view-enter-active {
+  transition:
+    opacity 220ms ease-out,
+    translate 220ms var(--ease-out-soft);
+}
+.view-leave-active {
+  transition: opacity 120ms ease-out;
+}
+.view-enter-from {
+  opacity: 0;
+  translate: 0 8px;
+}
+.view-leave-to {
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .view-enter-from {
+    translate: none;
+  }
+}
+
+/* Karte als Ganzes klickbar: der Titel-Knopf spannt sich über die Karte, Fokusring an der Karte. */
+.card-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+}
+.card-link:focus-visible {
+  outline: none;
+}
+.card:has(.card-link:focus-visible) {
+  outline: 2px solid var(--color-series-1);
+  outline-offset: 2px;
+}
+
+/* Icon-Wechsel nach better-ui: Skalierung 0.25 → 1, Blur 4px → 0, 300ms */
+.icon-swap {
+  transition-property: opacity, scale, filter;
+  transition-duration: 300ms;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+.icon-out {
+  opacity: 0;
+  scale: 0.25;
+  filter: blur(4px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .icon-swap {
+    transition-property: opacity;
+  }
+  .icon-out {
+    scale: 1;
+    filter: none;
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "name": "agentdashboard",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Agent Dashboard - Live-Übersicht aller Claude-Code-Sessions",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "tauri": "tauri",
+    "app:dev": "tauri dev",
+    "app:build": "tauri build",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "cargo test --manifest-path src-tauri/Cargo.toml && python tui/test_agentdashboard.py"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.11.0",
+    "lucide-vue-next": "^1.0.0",
+    "vue": "^3.5.35"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.0",
+    "@tauri-apps/cli": "^2.11.2",
+    "@vitejs/plugin-vue": "^6.0.7",
+    "tailwindcss": "^4.3.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.14",
+    "vue-tsc": "^3.3.3"
+  }
+}

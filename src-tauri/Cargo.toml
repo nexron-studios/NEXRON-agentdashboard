@@ -1,0 +1,23 @@
+[package]
+name = "agentdashboard"
+version = "0.1.0"
+description = "Agent Dashboard - Live-Übersicht aller Claude-Code-Sessions"
+authors = ["NEXRON"]
+edition = "2021"
+
+[lib]
+name = "agentdashboard_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+
+# Transkripte sind bis zu 40 MB groß; ohne Optimierung braucht serde_json im Dev-Build ein Vielfaches.
+[profile.dev.package."*"]
+opt-level = 2

@@ -335,14 +335,27 @@ async fn open_session(pid: Option<u32>, cwd: String, entrypoint: String) -> Resu
     window::focus_process_window(pid.ok_or("Keine Prozess-ID für diese Session")?)
 }
 
-/// Startgröße passend zum Bildschirm: Eine feste Größe ist auf einem Monitor zu klein und auf
-/// dem nächsten (z. B. 1080p mit 150 % Skalierung) größer als der Bildschirm. Das Fenster füllt
-/// den Arbeitsbereich bis auf einen schmalen Rand, höchstens so breit wie der Inhalt (1680 px)
-/// und so hoch, dass sechs Karten ohne Scrollen passen, und steht mittig. Es ist bis hierhin
-/// unsichtbar (tauri.conf.json), damit es nicht erst in der Standardgröße aufblitzt.
+/// Breite (logische px), ab der die Oberfläche in Originalgröße erscheint: drei Kartenspalten
+/// brauchen 980 px Raster plus Rand und Scrollleiste. Schmalere Fenster zoomen heraus statt auf
+/// zwei Spalten umzubrechen, damit das Dashboard klein neben dem Terminal dieselbe Übersicht zeigt.
+const DESIGN_WIDTH: f64 = 1200.0;
+/// Darunter wird die Schrift zu klein zum Lesen; dann bricht das Raster lieber um.
+const MIN_ZOOM: f64 = 0.7;
+
+fn zoom_to_width(win: &tauri::WebviewWindow, physical_width: u32) {
+    let Ok(scale) = win.scale_factor() else { return };
+    let zoom = (physical_width as f64 / scale / DESIGN_WIDTH).clamp(MIN_ZOOM, 1.0);
+    // Schlägt das fehl, bleibt die Oberfläche nur unskaliert; das Dashboard funktioniert weiter.
+    let _ = win.set_zoom((zoom * 100.0).round() / 100.0);
+}
+
+/// Startgröße kompakt für den Platz neben dem Terminal: so groß, dass bei herausgezoomter
+/// Oberfläche sechs Karten ohne Scrollen passen, höchstens der Arbeitsbereich bis auf einen
+/// schmalen Rand, mittig. Das Fenster ist bis hierhin unsichtbar (tauri.conf.json), damit es
+/// nicht erst in der Standardgröße aufblitzt.
 fn fit_to_monitor(win: &tauri::WebviewWindow) {
-    const MAX_W: f64 = 1700.0;
-    const MAX_H: f64 = 1120.0;
+    const MAX_W: f64 = 960.0;
+    const MAX_H: f64 = 760.0;
     const MARGIN: f64 = 16.0;
     let monitor = win.current_monitor().ok().flatten().or_else(|| win.primary_monitor().ok().flatten());
     if let (Some(m), Ok(outer), Ok(inner)) = (monitor, win.outer_size(), win.inner_size()) {
@@ -369,6 +382,15 @@ pub fn run() {
             use tauri::Manager;
             if let Some(win) = app.get_webview_window("main") {
                 fit_to_monitor(&win);
+                if let Ok(size) = win.inner_size() {
+                    zoom_to_width(&win, size.width);
+                }
+                let zoomed = win.clone();
+                win.on_window_event(move |event| {
+                    if let tauri::WindowEvent::Resized(size) = event {
+                        zoom_to_width(&zoomed, size.width);
+                    }
+                });
             }
             Ok(())
         })

@@ -380,8 +380,30 @@ fn fit_to_monitor(win: &tauri::WebviewWindow) {
     let _ = win.show();
 }
 
+/// Aus Finder oder Dock gestartet erbt die App nur den launchd-PATH (`/usr/bin:/bin:…`), ohne `~/.local/bin` und
+/// Homebrew. Dort liegen `claude`, `herdr` und `code`; ohne sie blieben Haiku-Titel und herdr-Zuordnung still leer.
+#[cfg(target_os = "macos")]
+fn extend_path_for_gui_launch() {
+    let mut dirs: Vec<PathBuf> = std::env::var_os("PATH")
+        .map(|path| std::env::split_paths(&path).collect())
+        .unwrap_or_default();
+    let local_bin = std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/bin"));
+    let extra = [local_bin, Some("/opt/homebrew/bin".into()), Some("/usr/local/bin".into())];
+    for dir in extra.into_iter().flatten() {
+        if !dirs.contains(&dir) {
+            dirs.push(dir);
+        }
+    }
+    if let Ok(joined) = std::env::join_paths(dirs) {
+        std::env::set_var("PATH", joined);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Vor dem ersten Thread: set_var ist nur sicher, solange niemand parallel die Umgebung liest.
+    #[cfg(target_os = "macos")]
+    extend_path_for_gui_launch();
     tauri::Builder::default()
         .setup(|app| {
             use tauri::Manager;

@@ -61,6 +61,13 @@ To build an installer:
 npm run app:build    # installer ends up in src-tauri/target/release/bundle
 ```
 
+For everyday use, run the built app, not the development one. `src-tauri/target/debug/agentdashboard` has no frontend of its own: it loads the page from the Vite server on port 1450, so the window goes black as soon as that server stops. On macOS, build only the app bundle and copy it to `~/Applications`:
+
+```bash
+npx tauri build --bundles app
+ditto "src-tauri/target/release/bundle/macos/Agent Dashboard - NEXRON.app" "$HOME/Applications/Agent Dashboard - NEXRON.app"
+```
+
 ### Terminal version
 
 If you don't want to build the app, there's a terminal version with no dependencies:

@@ -18,12 +18,15 @@ import {
 import { fetchDetail, type Detail } from '../api'
 import { date, duration, headline, modelName, PENDING_TITLE, time, tokens, usd, usePolling } from '../format'
 import FolderLink from './FolderLink.vue'
+import SessionClear from './SessionClear.vue'
 import SessionOpen from './SessionOpen.vue'
 import SessionMeta from './SessionMeta.vue'
 import StatusBadge from './StatusBadge.vue'
 import Timeline from './Timeline.vue'
 
 const props = defineProps<{ sessionId: string }>()
+// Nach /clear läuft im selben Terminal eine neue Session; diese hier ist dann beendet, also zurück zur Übersicht
+const emit = defineEmits<{ back: [] }>()
 
 const detail = ref<Detail | null>(null)
 const error = ref('')
@@ -118,6 +121,7 @@ const errors = computed(() => [...(s.value?.errors ?? [])].reverse().slice(0, 40
             :cwd="detail.live.cwd ?? s.cwd"
             :entrypoint="detail.live.entrypoint ?? ''"
           />
+          <SessionClear v-if="detail.live && detail.herdr" :herdr="detail.herdr" :status="status" @cleared="emit('back')" />
         </div>
         <h1 class="mt-3 text-[28px] leading-tight font-semibold tracking-tight" :class="{ 'text-ink-3': head?.pending }">
           {{ head?.pending ? PENDING_TITLE : head?.text || sessionId.slice(0, 8) }}

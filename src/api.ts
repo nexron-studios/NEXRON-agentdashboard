@@ -160,6 +160,7 @@ export interface Detail {
 export const fetchOverview = (recentLimit: number) => invoke<Overview>('overview', { recentLimit })
 export const fetchDetail = (sessionId: string) => invoke<Detail>('session_detail', { sessionId })
 export const focusHerdr = (tabId: string) => invoke<void>('focus_herdr', { tabId })
+export const clearHerdr = (paneId: string) => invoke<void>('clear_herdr', { paneId })
 export const openFolder = (path: string) => invoke<void>('open_folder', { path })
 export const openSession = (pid: number | null, cwd: string, entrypoint: string) =>
   invoke<void>('open_session', { pid, cwd, entrypoint })

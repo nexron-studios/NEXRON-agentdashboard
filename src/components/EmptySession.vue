@@ -100,8 +100,8 @@ onBeforeUnmount(() => {
   <div class="empty relative mt-4 flex min-h-[176px] flex-1 overflow-hidden rounded-xl border border-dashed border-line-strong/70">
     <!-- Warmer Schein hinter Clawd, nach außen ganz weg -->
     <div aria-hidden="true" class="empty-glow pointer-events-none absolute inset-0" />
-    <!-- Feines Punktraster, zur Mitte hin sichtbar -->
-    <div aria-hidden="true" class="empty-dots pointer-events-none absolute inset-0 opacity-70" />
+    <!-- Feines Punktraster nur am Rand: hinter Clawd, Text und Eingabezeile bleibt der Grund frei -->
+    <div aria-hidden="true" class="empty-dots pointer-events-none absolute inset-0 opacity-40" />
 
     <div class="empty-body relative flex flex-1 flex-col items-center justify-center gap-3 px-5 py-4 text-center">
       <!-- Clawd schläft (aus TokenScope); bei reduzierter Bewegung nur das erste Bild -->
@@ -118,7 +118,7 @@ onBeforeUnmount(() => {
           </p>
         </div>
 
-        <div class="flex w-full max-w-[220px] items-center gap-2 rounded-md border border-line-strong bg-app/60 px-2.5 py-1 font-mono text-[12px] text-ink-3">
+        <div class="flex w-full max-w-[220px] items-center gap-2 rounded-md border border-line-strong bg-app px-2.5 py-1 font-mono text-[12px] text-ink-3">
           <span class="w-[1ch] shrink-0" :class="shell ? 'text-series-7' : 'text-brand'">{{ shell ? '!' : '>' }}</span>
           <span class="-mr-1 truncate whitespace-pre text-ink-2" aria-hidden="true">{{ typed }}</span>
           <span class="h-3.5 w-[6px] shrink-0 rounded-[1px] bg-ink-2" :class="{ 'caret-blink': !typed }" aria-hidden="true" />
@@ -140,7 +140,7 @@ onBeforeUnmount(() => {
 .empty-dots {
   background-image: radial-gradient(var(--color-line-strong) 1px, transparent 1px);
   background-size: 16px 16px;
-  mask-image: radial-gradient(circle at var(--gx) 45%, black, transparent 70%);
+  mask-image: radial-gradient(ellipse at 50% 50%, transparent 55%, black 95%);
 }
 /* Wenig Platz: erst der Hinweistext weg … */
 @container (max-height: 236px) {

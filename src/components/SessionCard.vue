@@ -5,6 +5,7 @@ import type { SessionRow } from '../api'
 import { ago, awaitsYou, clock, date, duration, headline, modelName, needsApproval, PENDING_TITLE, plainPrompt, tokens } from '../format'
 import EmptySession from './EmptySession.vue'
 import FolderLink from './FolderLink.vue'
+import SessionClear from './SessionClear.vue'
 import SessionOpen from './SessionOpen.vue'
 import StatusBadge from './StatusBadge.vue'
 import { accountInfo } from '../store'
@@ -72,10 +73,11 @@ const action = computed(() => {
       </button>
     </h3>
 
-    <!-- Eine ruhige Infozeile statt einzelner Chips -->
-    <p class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-ink-3">
+    <!-- Eine ruhige Infozeile statt einzelner Chips. Sie bricht nie um: Sobald „vor 55 s“ zu „vor 1 min“
+         wird, würde sie sonst bei jedem Tick anders umbrechen und die ganze Karte springen lassen. -->
+    <p class="mt-1 flex min-w-0 items-center gap-x-2 overflow-hidden text-[13px] whitespace-nowrap text-ink-3">
       <template v-if="yourTurn && s.finishedAt">
-        <span class="flex items-center gap-1.5 font-semibold text-good" :title="`Fertig geworden ${date(s.finishedAt)}`">
+        <span class="flex shrink-0 items-center gap-1.5 font-semibold text-good" :title="`Fertig geworden ${date(s.finishedAt)}`">
           <span
             v-if="rank"
             class="num grid h-4.5 min-w-4.5 place-items-center rounded-full px-1 text-[11px] font-bold"
@@ -89,19 +91,21 @@ const action = computed(() => {
       <span v-else-if="s.lastT">{{ fresh ? 'gestartet' : 'aktiv' }} {{ ago(s.lastT, now) }}</span>
       <template v-if="s.prompts">
         <span aria-hidden="true">·</span>
-        <span>{{ s.prompts }} {{ s.prompts === 1 ? 'Anfrage' : 'Anfragen' }}</span>
-      </template>
-      <template v-if="s.context">
-        <span aria-hidden="true">·</span>
-        <span title="Modell der letzten Antwort">{{ modelName(s.lastModel) }}</span>
-        <span class="flex items-center gap-1.5" :title="`${s.context.tokens.toLocaleString('de-DE')} von ${s.context.window.toLocaleString('de-DE')} Tokens im Kontext`">
-          <span class="h-1.5 w-10 overflow-hidden rounded-full bg-surface-3">
-            <span class="bar-grow block h-full rounded-full" :class="ctxPct > 85 ? 'bg-warning' : 'bg-series-1'" :style="{ width: ctxPct + '%' }" />
-          </span>
-          <span class="num">{{ tokens(s.context.tokens) }}</span>
-        </span>
+        <span class="truncate">{{ s.prompts }} {{ s.prompts === 1 ? 'Anfrage' : 'Anfragen' }}</span>
       </template>
     </p>
+    <!-- Kontext als eigene Zeile über die volle Kartenbreite, damit die Leiste in jeder Karte gleich lang ist -->
+    <div
+      v-if="s.context"
+      class="mt-2 flex items-center gap-2.5 text-[13px] text-ink-3"
+      :title="`${s.context.tokens.toLocaleString('de-DE')} von ${s.context.window.toLocaleString('de-DE')} Tokens im Kontext`"
+    >
+      <span class="shrink-0" title="Modell der letzten Antwort">{{ modelName(s.lastModel) }}</span>
+      <span class="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-3">
+        <span class="bar-grow block h-full rounded-full" :class="ctxPct > 85 ? 'bg-warning' : 'bg-series-1'" :style="{ width: ctxPct + '%' }" />
+      </span>
+      <span class="num shrink-0">{{ tokens(s.context.tokens) }}</span>
+    </div>
     <p v-if="!fresh && head.startedAs" class="mt-1 truncate text-[13px] text-ink-3" :title="`Titel von Claude Code: ${head.startedAs}`">
       Gestartet als „{{ head.startedAs }}“
     </p>
@@ -152,7 +156,10 @@ const action = computed(() => {
 
     <div class="mt-auto flex items-center gap-2 pt-5">
       <FolderLink :path="s.cwd" class="min-w-0" />
-      <SessionOpen v-if="s.live" class="ml-auto" :herdr="s.herdr" :pid="s.pid" :cwd="s.cwd" :entrypoint="s.entrypoint" />
+      <div v-if="s.live" class="ml-auto flex shrink-0 items-center gap-2">
+        <SessionClear v-if="s.herdr" :herdr="s.herdr" :status="s.status" />
+        <SessionOpen :herdr="s.herdr" :pid="s.pid" :cwd="s.cwd" :entrypoint="s.entrypoint" />
+      </div>
     </div>
   </article>
 </template>

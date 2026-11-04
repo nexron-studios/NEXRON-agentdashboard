@@ -37,7 +37,9 @@ const counts = computed(() => {
 })
 
 const onKey = (e: KeyboardEvent) => {
-  if (e.key === 'Escape') selected.value = null
+  // Esc in einem offenen Dialog schließt nur den Dialog, nicht auch noch die Detailansicht
+  if (e.key !== 'Escape' || document.querySelector('[role="alertdialog"]')) return
+  selected.value = null
 }
 onMounted(() => window.addEventListener('keydown', onKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
@@ -93,7 +95,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
     <main class="min-h-0 flex-1 overflow-y-auto">
       <Transition name="view" mode="out-in">
-        <SessionDetail v-if="selected" :key="selected" :session-id="selected" />
+        <SessionDetail v-if="selected" :key="selected" :session-id="selected" @back="selected = null" />
         <SessionList v-else :overview="overview" :error="error" :now="now" @select="selected = $event" />
       </Transition>
     </main>

@@ -111,3 +111,21 @@ fn pane_pid(pane_id: &str) -> Option<u32> {
 pub fn focus_tab(tab_id: &str) -> Result<(), String> {
     call(&["tab", "focus", tab_id]).map(|_| ()).ok_or_else(|| "herdr hat den Tab nicht fokussiert. Läuft herdr?".into())
 }
+
+/// Tippt `/clear` in den Chat des Panes, als hätte man es selbst eingegeben. Der Status wird hier noch
+/// einmal frisch abgefragt, denn die Karte kann bis zu 2 s alt sein: Während Claude arbeitet, würde der
+/// Befehl eingereiht und den Verlauf mitten in der Aufgabe löschen. Eine offene Freigabe-Frage weist
+/// `agent prompt` selbst ab, bevor es etwas sendet.
+pub fn clear_chat(pane_id: &str) -> Result<(), String> {
+    let info = call(&["agent", "get", pane_id]).ok_or("herdr findet diesen Chat nicht mehr. Läuft herdr?")?;
+    let agent = &info["agent"];
+    if agent["agent"] != "claude" {
+        return Err("In diesem herdr-Tab läuft kein Claude mehr.".into());
+    }
+    if !matches!(agent["agent_status"].as_str(), Some("idle" | "done")) {
+        return Err("Claude arbeitet gerade oder wartet auf eine Freigabe. Löschen geht erst, wenn er fertig ist.".into());
+    }
+    call(&["agent", "prompt", pane_id, "/clear"])
+        .map(|_| ())
+        .ok_or_else(|| "herdr hat /clear nicht gesendet.".into())
+}

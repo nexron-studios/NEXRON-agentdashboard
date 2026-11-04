@@ -41,13 +41,13 @@ async function clear() {
 
 <template>
   <button
-    class="press relative z-10 grid shrink-0 place-items-center rounded-lg border border-line-strong p-1.5 text-ink-2 hover:border-critical/60 hover:text-critical"
+    class="press relative z-10 grid shrink-0 place-items-center self-stretch rounded-lg border border-line-strong px-2.5 text-ink-2 hover:border-critical/60 hover:text-critical"
     :class="{ 'cursor-not-allowed opacity-40 hover:border-line-strong! hover:text-ink-2!': !ready, 'border-critical! text-critical!': failed }"
     :aria-disabled="!ready"
     :title="hint"
     @click.stop="setOpen(true)"
   >
-    <Trash2 :size="14" :stroke-width="2" aria-hidden="true" />
+    <Trash2 :size="16" :stroke-width="2" aria-hidden="true" />
     <span class="sr-only">Chat löschen</span>
   </button>
 

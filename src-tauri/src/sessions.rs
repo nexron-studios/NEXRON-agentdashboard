@@ -155,8 +155,31 @@ fn process_alive(pid: u32, proc_start: Option<&str>) -> bool {
 }
 
 #[cfg(not(windows))]
-fn process_alive(pid: u32, _proc_start: Option<&str>) -> bool {
-    Path::new(&format!("/proc/{pid}")).exists()
+fn process_alive(pid: u32, proc_start: Option<&str>) -> bool {
+    extern "C" {
+        fn kill(pid: i32, sig: i32) -> i32;
+    }
+    const EPERM: i32 = 1;
+    // `/proc` gibt es nur unter Linux; Signal 0 prüft überall nur, ob die PID existiert.
+    // SAFETY: Signal 0 wird nicht zugestellt.
+    let exists = unsafe { kill(pid as i32, 0) } == 0
+        || std::io::Error::last_os_error().raw_os_error() == Some(EPERM);
+    if !exists {
+        return false;
+    }
+    let Some(expected) = proc_start else { return true };
+    // Claude Code schreibt die Startzeit wie `ps -o lstart` in UTC („Wed Oct 28 10:11:40 2026“).
+    let Ok(out) = Command::new("ps")
+        .args(["-o", "lstart=", "-p", &pid.to_string()])
+        .env("LC_ALL", "C")
+        .env("TZ", "UTC")
+        .output()
+    else {
+        return true;
+    };
+    let words = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ");
+    // Gleiche PID, anderer Prozess: abweichende Startzeit
+    words(&String::from_utf8_lossy(&out.stdout)) == words(expected)
 }
 
 pub fn find_transcript(profile_dir: &Path, session_id: &str) -> Option<PathBuf> {
@@ -224,4 +247,39 @@ pub fn run_quiet(program: &Path, args: &[&str]) -> Option<String> {
     }
     let out = cmd.output().ok()?;
     out.status.success().then(|| String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+#[cfg(all(test, not(windows)))]
+mod tests {
+    use super::*;
+
+    fn own_start() -> String {
+        let out = Command::new("ps")
+            .args(["-o", "lstart=", "-p", &std::process::id().to_string()])
+            .env("LC_ALL", "C")
+            .env("TZ", "UTC")
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    #[test]
+    fn own_process_counts_as_alive() {
+        assert!(process_alive(std::process::id(), None));
+        assert!(process_alive(std::process::id(), Some(&own_start())));
+    }
+
+    #[test]
+    fn reused_pid_with_other_start_time_is_dead() {
+        assert!(!process_alive(std::process::id(), Some("Thu Jan  1 00:00:00 1970")));
+    }
+
+    /// `cargo test -- --ignored --nocapture lists_live_sessions`: zeigt, was das Dashboard gerade als laufend sieht
+    #[test]
+    #[ignore]
+    fn lists_live_sessions() {
+        for s in live_sessions(&profiles()) {
+            println!("{} {} {:?} {:?}", s.account, s.pid, s.name, s.status);
+        }
+    }
 }

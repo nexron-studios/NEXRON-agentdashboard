@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { Bot, CircleCheck, CircleX, Code, LayoutPanelTop, MessageSquareText, SquareTerminal, UserRound, Wrench } from 'lucide-vue-next'
+import { Bot, CircleCheck, CircleX, Code, LayoutPanelTop, MessageSquareText, SquareTerminal, UserRound } from 'lucide-vue-next'
 import type { SessionRow } from '../api'
 import { ago, awaitsYou, clock, date, duration, headline, modelName, needsApproval, PENDING_TITLE, plainPrompt, tokens } from '../format'
 import EmptySession from './EmptySession.vue'
@@ -9,6 +9,8 @@ import SessionClear from './SessionClear.vue'
 import SessionOpen from './SessionOpen.vue'
 import SessionStop from './SessionStop.vue'
 import StatusBadge from './StatusBadge.vue'
+import TerminalLoader from './TerminalLoader.vue'
+import { toolIcon } from '../toolIcons'
 import WaveLoader from './WaveLoader.vue'
 import { accountInfo } from '../store'
 
@@ -52,11 +54,16 @@ const showLast = computed(() => {
   return !!last && !(head.value.switched && last.startsWith(start))
 })
 // Der letzte Schritt ist entweder ein Tool-Aufruf oder Text von Claude (vom Backend mit 💬 markiert).
+// Ein Tool-Aufruf kommt als „Name: Ziel“; der Name steht davor in Monospace.
+const TOOL_PREFIX = /^([\w.-]+)(?:: (.*))?$/s
 const action = computed(() => {
   const a = s.value.lastAction
   const said = a.startsWith('💬 ')
-  return { said, text: (said ? a.slice(3) : a).replace(/\*\*|`/g, '') }
+  const text = (said ? a.slice(3) : a).replace(/\*\*|`/g, '')
+  const match = said ? null : TOOL_PREFIX.exec(text)
+  return { said, text, tool: match?.[1] ?? '', detail: match ? (match[2] ?? '') : text }
 })
+const isBash = computed(() => action.value.tool === 'Bash')
 </script>
 
 <template>
@@ -144,10 +151,18 @@ const action = computed(() => {
       </div>
       <div class="flex h-[1lh] gap-2.5 text-[13px]" :class="waiting ? 'text-ink' : 'text-ink-3'">
         <template v-if="s.lastAction">
-          <component :is="action.said ? Bot : Wrench" :size="16" :stroke-width="1.75" class="mt-px shrink-0" :class="{ 'text-critical': waiting }" />
-          <p :key="action.text" class="rise-in min-w-0 flex-1 truncate" :class="{ shimmer: working && !action.said }" :title="action.text">
+          <TerminalLoader v-if="isBash" :size="16" :running="working" class="mt-px" :class="working ? 'text-warning' : waiting ? 'text-critical' : ''" />
+          <component :is="action.said ? Bot : toolIcon(action.tool)" v-else :size="16" :stroke-width="1.75" class="mt-px shrink-0" :class="{ 'text-critical': waiting }" />
+          <!-- Neuer Befehl tippt sich ein wie im Terminal, alle anderen Schritte gleiten herein -->
+          <p
+            :key="action.text"
+            class="min-w-0 flex-1 truncate"
+            :class="[isBash && working ? 'type-in' : 'rise-in', { shimmer: working && !action.said }]"
+            :title="action.text"
+          >
             <span v-if="waiting" class="font-semibold text-critical">Fragt nach: </span>
-            <span v-else-if="action.said" class="font-medium text-ink-2">Claude: </span>{{ action.text }}
+            <span v-else-if="action.said" class="font-medium text-ink-2">Claude: </span>
+            <span v-if="action.tool" class="mr-1.5 font-mono text-[12px] text-ink-2">{{ action.tool }}</span>{{ action.detail }}
           </p>
         </template>
         <SessionStop v-if="working && s.live && s.herdr" :pane-id="s.herdr.paneId" class="ml-auto" />

@@ -1,0 +1,9 @@
+{
+  "name": "Agent Dashboard",
+  "tagline": "Every Claude Code session on your machine, at a glance",
+  "glyph": "glyph.svg",
+  "brand": "#d97757",
+  "brand_light": "#d97757",
+  "pattern": "grid",
+  "out": "."
+}

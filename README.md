@@ -1,4 +1,22 @@
-# Agent Dashboard - NEXRON
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/readme-banner-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/brand/readme-banner-light.svg">
+  <img src="docs/brand/readme-banner-dark.svg" alt="Agent Dashboard by NEXRON Studios: every Claude Code session on your machine, at a glance" width="100%">
+</picture>
+
+<br><br>
+
+<img src="https://img.shields.io/badge/Tauri-2-d97757?style=flat-square&labelColor=19191a&logo=tauri&logoColor=f0efec" alt="Tauri 2">
+<img src="https://img.shields.io/badge/Vue-3-d97757?style=flat-square&labelColor=19191a&logo=vuedotjs&logoColor=f0efec" alt="Vue 3">
+<img src="https://img.shields.io/badge/Rust-2021-d97757?style=flat-square&labelColor=19191a&logo=rust&logoColor=f0efec" alt="Rust 2021">
+<img src="https://img.shields.io/badge/Windows-11-d97757?style=flat-square&labelColor=19191a" alt="Windows 11">
+<img src="https://img.shields.io/badge/Claude_Code-read--only-d97757?style=flat-square&labelColor=19191a&logo=anthropic&logoColor=f0efec" alt="Reads Claude Code's files, never writes them">
+
+</div>
+
+<br>
 
 A live overview of every [Claude Code](https://claude.com/claude-code) session running on your machine. It's a desktop app (Tauri 2 + Vue 3) with a lightweight terminal version alongside it.
 
@@ -132,3 +150,7 @@ cargo test --release --manifest-path src-tauri/Cargo.toml parses_real_transcript
 ## Disclaimer
 
 Agent Dashboard is an independent project by NEXRON Studios. It is not affiliated with or endorsed by Anthropic. Claude, Claude Code and Clawd are trademarks of Anthropic.
+
+<br>
+
+<div align="center"><sub>Agent Dashboard is a NEXRON Studios tool. Banner from <code>docs/brand/banner.json</code>; colours from the <code>@theme</code> tokens in <code>src/style.css</code>.</sub></div>

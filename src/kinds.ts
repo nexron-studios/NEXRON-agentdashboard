@@ -1,12 +1,13 @@
 import {
-  BookOpen, Bot, Earth, FilePen, FilePlus, FileText, GitFork, Globe, ListTodo, Map, MessageCircleQuestion,
-  Plug, Search, Send, Settings2, Sparkles, SquareTerminal, Telescope, Wrench, Zap,
+  AlarmClock, BookOpen, Bot, CircleStop, Earth, Eye, FilePen, FilePlus, FileText, GitFork, Globe, ListTodo, Map,
+  MessageCircleQuestion, Plug, Search, Send, Settings2, Sparkles, SquareTerminal, Telescope, Users, Workflow, Wrench, Zap,
 } from 'lucide-vue-next'
 import type { Component } from 'vue'
 
 // Eine Farbsprache für alles, was Claude tut, überall gleich: Karte, Ablauf, Tool-Nutzung, Zeitleiste.
 // Blau liest, orange schreibt, cyan sucht, limette geht ins Web, gelb führt Befehle aus,
-// lila delegiert an Subagents, grün spricht mit MCP-Servern, Claudes eigener Text in der Markenfarbe.
+// lila delegiert an Subagents und Hintergrund-Tasks, grün spricht mit MCP-Servern. In der Markenfarbe
+// steht, was Claude selbst tut: schreiben, planen, nachfragen, Skills laden.
 // Klassen stehen ausgeschrieben, weil Tailwind nur vollständige Klassennamen im Quelltext findet.
 const TONES = {
   blue: { text: 'text-series-1', chip: 'bg-series-1/15 text-series-1', bar: 'bg-series-1', color: 'var(--color-series-1)' },
@@ -44,12 +45,19 @@ const TOOL_KINDS: Record<string, Kind> = {
   WebSearch: kind(Earth, 'lime'),
   // Auf der Karte ersetzt der animierte TerminalLoader dieses Icon, die Farbe bleibt dieselbe
   Bash: kind(SquareTerminal, 'amber'),
+  Monitor: kind(Eye, 'amber'),
+  KillShell: kind(CircleStop, 'amber'),
   Agent: kind(Bot, 'purple'),
   Task: kind(Bot, 'purple'),
   SendMessage: kind(Send, 'purple'),
-  TodoWrite: kind(ListTodo, 'neutral'),
-  Skill: kind(Zap, 'neutral'),
-  AskUserQuestion: kind(MessageCircleQuestion, 'neutral'),
+  ListAgents: kind(Users, 'purple'),
+  Workflow: kind(Workflow, 'purple'),
+  TaskStop: kind(CircleStop, 'purple'),
+  TaskOutput: kind(Bot, 'purple'),
+  TodoWrite: kind(ListTodo, 'brand'),
+  Skill: kind(Zap, 'brand'),
+  AskUserQuestion: kind(MessageCircleQuestion, 'brand'),
+  ScheduleWakeup: kind(AlarmClock, 'brand'),
 }
 const MCP_KIND = kind(Plug, 'green')
 const DEFAULT_TOOL = kind(Wrench, 'neutral')

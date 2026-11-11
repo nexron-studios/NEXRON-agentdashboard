@@ -53,7 +53,6 @@ const ctx = computed(() => {
 
 const tools = computed(() => Object.entries(s.value?.tools ?? {}).sort((a, b) => b[1] - a[1]))
 const toolMax = computed(() => tools.value[0]?.[1] ?? 1)
-const TOOL_ROWS = 12
 
 const CATEGORIES = [
   { key: 'input', label: 'Input', color: 'var(--color-series-1)' },
@@ -178,11 +177,12 @@ const errors = computed(() => [...(s.value?.errors ?? [])].reverse().slice(0, 40
         <section class="card enter p-6" style="--i: 2">
           <h2 class="flex items-center gap-2 text-[16px] font-semibold"><Wrench :size="18" :stroke-width="2" class="text-series-1" /> Tool-Nutzung</h2>
           <p class="mt-1 text-[13px] text-ink-3">{{ tools.length }} Tools · {{ s.toolCalls }} Aufrufe</p>
-          <div class="mt-4 space-y-1.5">
+          <!-- Zwölf Zeilen sichtbar, der Rest scrollt, damit die Karte so hoch bleibt wie das Kontextfenster daneben -->
+          <div class="mt-4 max-h-[calc(12*--spacing(6)+11*--spacing(1.5))] space-y-1.5 scroll-thin overflow-y-auto overscroll-contain pr-1.5">
             <div
-              v-for="[name, n] in tools.slice(0, TOOL_ROWS)"
+              v-for="[name, n] in tools"
               :key="name"
-              class="grid grid-cols-[160px_1fr] items-center gap-3 rounded-md px-1.5 py-0.5 transition-colors duration-150 hover:bg-surface-2"
+              class="grid h-6 grid-cols-[160px_1fr] items-center gap-3 rounded-md px-1.5 transition-colors duration-150 hover:bg-surface-2"
               :title="`${name}: ${n} Aufrufe`"
             >
               <span class="flex min-w-0 items-center gap-1.5 font-mono text-[13px] text-ink-2">
@@ -194,9 +194,6 @@ const errors = computed(() => [...(s.value?.errors ?? [])].reverse().slice(0, 40
                 <span class="num text-[13px] text-ink-2">{{ n }}</span>
               </div>
             </div>
-            <p v-if="tools.length > TOOL_ROWS" class="px-1.5 pt-1 text-[12px] text-ink-3">
-              + {{ tools.length - TOOL_ROWS }} weitere mit zusammen {{ tools.slice(TOOL_ROWS).reduce((a, [, n]) => a + n, 0) }} Aufrufen
-            </p>
             <p v-if="!tools.length" class="text-ink-3">Noch keine Tools benutzt.</p>
           </div>
         </section>

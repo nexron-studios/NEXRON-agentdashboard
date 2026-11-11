@@ -145,7 +145,8 @@ const action = computed(() => {
         {{ s.agentsTotal }} {{ s.agentsTotal === 1 ? 'Subagent' : 'Subagents' }}
         <span v-if="s.agentsRunning" class="font-medium text-warning">· {{ s.agentsRunning }} {{ s.agentsRunning === 1 ? 'läuft' : 'laufen' }}</span>
       </p>
-      <ul class="mt-2 space-y-1.5">
+      <!-- Höchstens vier Zeilen hoch, der Rest scrollt; über dem Klickfeld der Karte, damit das Scrollrad ankommt -->
+      <ul class="relative z-10 mt-2 max-h-[calc(4lh+3*--spacing(1.5))] space-y-1.5 scroll-thin overflow-y-auto overscroll-contain pr-1.5 text-[13px]">
         <li v-for="a in s.agents" :key="a.id" class="flex items-center gap-2 text-[13px]">
           <component
             :is="agentIcon(a.status)"

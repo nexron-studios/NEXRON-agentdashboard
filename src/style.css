@@ -74,6 +74,14 @@ h3 {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+/* Schmale Leiste für Listen in Karten (Subagents); der breite Rand oben passt nur auf den App-Grund */
+.scroll-thin::-webkit-scrollbar {
+  width: 6px;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  border: none;
+  border-radius: 3px;
+}
 
 .num {
   font-variant-numeric: tabular-nums;

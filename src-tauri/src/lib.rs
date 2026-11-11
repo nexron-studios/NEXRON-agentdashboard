@@ -15,8 +15,8 @@ use transcript::{AgentRun, Context, Stats, Transcript};
 
 /// Für beendete Sessions reicht das Dateiende: Titel, letzte Anfrage und letzter Schritt stehen dort.
 const TAIL_BYTES: u64 = 300_000;
-/// So viele Subagents zeigt eine Karte höchstens (laufende zuerst).
-const CARD_AGENTS: usize = 4;
+/// So viele Subagents bekommt eine Karte höchstens (laufende zuerst); ab vier Zeilen scrollt die Liste.
+const CARD_AGENTS: usize = 20;
 /// Profile und Logins ändern sich selten; `.claude.json` muss nicht alle 2 s gelesen werden.
 const PROFILE_TTL: Duration = Duration::from_secs(30);
 /// So viele beendete Sessions bleiben vollständig gelesen im Speicher (zuletzt geöffnete), laufende immer.
@@ -192,9 +192,8 @@ fn title_pending(stats: &Stats, topic: &str, topics: &topics::Topics, session_id
 }
 
 fn card_agents(stats: &Stats) -> Vec<AgentRun> {
-    let mut agents: Vec<AgentRun> = stats.agents.iter().rev().take(20).cloned().collect();
+    let mut agents: Vec<AgentRun> = stats.agents.iter().rev().take(CARD_AGENTS).cloned().collect();
     agents.sort_by_key(|a| (a.status != "running", -a.started));
-    agents.truncate(CARD_AGENTS);
     agents
 }
 

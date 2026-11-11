@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Bot, CircleCheck, CircleX, Code, LayoutPanelTop, LoaderCircle, MessageSquareText, Sparkles, SquareTerminal, UserRound, Wrench } from 'lucide-vue-next'
+import { Bot, CircleCheck, CircleX, Code, LayoutPanelTop, LoaderCircle, MessageSquareText, SquareTerminal, UserRound, Wrench } from 'lucide-vue-next'
 import type { SessionRow } from '../api'
 import { ago, awaitsYou, clock, date, duration, headline, modelName, needsApproval, PENDING_TITLE, plainPrompt, tokens } from '../format'
 import EmptySession from './EmptySession.vue'
@@ -17,6 +17,7 @@ const s = computed(() => props.session)
 const waiting = computed(() => needsApproval(s.value.status))
 const fresh = computed(() => !s.value.title && !s.value.lastPrompt)
 const yourTurn = computed(() => awaitsYou(s.value.status) && !fresh.value)
+const working = computed(() => s.value.status === 'busy' || s.value.status === 'shell')
 const AGENT_ICON = { running: LoaderCircle, done: CircleCheck, failed: CircleX } as const
 const agentIcon = (st: string) => AGENT_ICON[st as keyof typeof AGENT_ICON] ?? CircleCheck
 const ctxPct = computed(() => (s.value.context ? Math.min(100, (s.value.context.tokens / s.value.context.window) * 100) : 0))
@@ -24,6 +25,12 @@ const head = computed(() => headline(s.value))
 const acc = computed(() => accountInfo(s.value.account))
 // „Gestartet mit“ nur, solange die Session beim ersten Thema ist und die erste Anfrage etwas anderes sagt als die letzte
 const showFirst = computed(() => !head.value.switched && s.value.firstPrompt && s.value.firstPrompt !== s.value.lastPrompt)
+// Eine Zeile für den Ursprung: „Gestartet als“ (Titel nach Themenwechsel) oder „Gestartet mit“ (erste Anfrage)
+const origin = computed(() => {
+  if (head.value.startedAs) return { label: 'Gestartet als', text: `„${head.value.startedAs}“`, tip: `Titel von Claude Code: ${head.value.startedAs}` }
+  if (showFirst.value) return { label: 'Gestartet mit:', text: plainPrompt(s.value.firstPrompt), tip: s.value.firstPrompt }
+  return null
+})
 // Stammt die Überschrift aus der letzten Anfrage, nicht noch einmal darunter wiederholen (voller Text in der Detailansicht)
 const showLast = computed(() => {
   const last = plainPrompt(s.value.lastPrompt).toLowerCase()
@@ -67,8 +74,9 @@ const action = computed(() => {
       <StatusBadge :status="s.status" :fresh="fresh" size="sm" />
     </div>
 
-    <h3 class="mt-4 line-clamp-2 text-[17px] leading-snug font-semibold tracking-tight" :class="{ 'text-ink-3': fresh || head.pending }">
-      <button class="card-link text-left" @click="emit('open')">
+    <!-- Jeder Textbereich hat eine feste Zeilenzahl: Ändert sich der Text, bleibt die Karte gleich hoch. -->
+    <h3 class="mt-4 truncate text-[17px] leading-snug font-semibold tracking-tight" :class="{ 'text-ink-3': fresh || head.pending }">
+      <button class="card-link text-left" :title="fresh || head.pending ? undefined : head.text" @click="emit('open')">
         {{ fresh ? 'Neue Session' : head.pending ? PENDING_TITLE : head.text }}
       </button>
     </h3>
@@ -106,29 +114,28 @@ const action = computed(() => {
       </span>
       <span class="num shrink-0">{{ tokens(s.context.tokens) }}</span>
     </div>
-    <p v-if="!fresh && head.startedAs" class="mt-1 truncate text-[13px] text-ink-3" :title="`Titel von Claude Code: ${head.startedAs}`">
-      Gestartet als „{{ head.startedAs }}“
+    <p v-if="!fresh" class="mt-1 truncate text-[13px] text-ink-3" :title="origin?.tip">
+      <template v-if="origin"><span class="font-medium text-ink-2">{{ origin.label }}</span> {{ origin.text }}</template>
+      <template v-else>&nbsp;</template>
     </p>
 
     <EmptySession v-if="fresh" :vscode="s.entrypoint === 'claude-vscode'" />
 
     <div v-else class="mt-4 space-y-2.5 border-t border-line pt-4">
-      <div v-if="showFirst" class="flex gap-2.5 text-[14px]">
-        <Sparkles :size="16" :stroke-width="1.75" class="mt-0.5 shrink-0 text-ink-3" />
-        <p class="line-clamp-2 text-ink-3" :title="s.firstPrompt">
-          <span class="font-medium text-ink-2">Gestartet mit:</span> {{ s.firstPrompt }}
+      <div class="flex gap-2.5 text-[14px]">
+        <MessageSquareText :size="16" :stroke-width="1.75" class="mt-0.5 shrink-0 text-ink-3" :class="{ invisible: !showLast }" />
+        <p class="line-clamp-2 h-[2lh] [overflow-wrap:anywhere] text-ink" :title="showLast ? s.lastPrompt : undefined">
+          {{ showLast ? plainPrompt(s.lastPrompt) : '' }}
         </p>
       </div>
-      <div v-if="showLast" class="flex gap-2.5 text-[14px]">
-        <MessageSquareText :size="16" :stroke-width="1.75" class="mt-0.5 shrink-0 text-ink-3" />
-        <p class="line-clamp-3 whitespace-pre-line text-ink" :title="s.lastPrompt">{{ s.lastPrompt }}</p>
-      </div>
-      <div v-if="s.lastAction" class="flex gap-2.5 text-[13px]" :class="waiting ? 'text-ink' : 'text-ink-3'">
-        <component :is="action.said ? Bot : Wrench" :size="16" :stroke-width="1.75" class="mt-px shrink-0" :class="{ 'text-critical': waiting }" />
-        <p class="line-clamp-2 [overflow-wrap:anywhere]" :title="action.text">
-          <span v-if="waiting" class="font-semibold text-critical">Fragt nach: </span>
-          <span v-else-if="action.said" class="font-medium text-ink-2">Claude: </span>{{ action.text }}
-        </p>
+      <div class="flex h-[1lh] gap-2.5 text-[13px]" :class="waiting ? 'text-ink' : 'text-ink-3'">
+        <template v-if="s.lastAction">
+          <component :is="action.said ? Bot : Wrench" :size="16" :stroke-width="1.75" class="mt-px shrink-0" :class="{ 'text-critical': waiting }" />
+          <p class="min-w-0 truncate" :class="{ shimmer: working && !action.said }" :title="action.text">
+            <span v-if="waiting" class="font-semibold text-critical">Fragt nach: </span>
+            <span v-else-if="action.said" class="font-medium text-ink-2">Claude: </span>{{ action.text }}
+          </p>
+        </template>
       </div>
     </div>
 
@@ -148,7 +155,7 @@ const action = computed(() => {
             :class="{ 'spin text-warning': a.status === 'running', 'text-good': a.status === 'done', 'text-critical': a.status === 'failed', 'text-ink-3': a.status === 'stopped' }"
           />
           <span class="shrink-0 rounded bg-series-7/20 px-1.5 text-[12px] font-medium">{{ a.agentType }}</span>
-          <span class="min-w-0 flex-1 truncate" :class="a.status === 'running' ? 'text-ink' : 'text-ink-3'">{{ a.description }}</span>
+          <span class="min-w-0 flex-1 truncate" :class="a.status === 'running' ? 'shimmer text-ink' : 'text-ink-3'">{{ a.description }}</span>
           <span class="num shrink-0 text-[12px] text-ink-3">{{ duration((a.finished ?? now) - a.started) }}</span>
         </li>
       </ul>

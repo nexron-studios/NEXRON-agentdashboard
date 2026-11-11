@@ -175,3 +175,19 @@ export const stopHerdr = (paneId: string) => invoke<void>('stop_herdr', { paneId
 export const openFolder = (path: string) => invoke<void>('open_folder', { path })
 export const openSession = (pid: number | null, cwd: string, entrypoint: string) =>
   invoke<void>('open_session', { pid, cwd, entrypoint })
+
+export interface QuotaWindow {
+  key: string
+  usedPercent: number
+  resetsAt: string | null
+}
+
+export interface AccountQuota {
+  label: string
+  email: string | null
+  windows: QuotaWindow[]
+  fetchedAt: number
+  error: string | null
+}
+
+export const fetchQuota = () => invoke<AccountQuota[]>('quota')

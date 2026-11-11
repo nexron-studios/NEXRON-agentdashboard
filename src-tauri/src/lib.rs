@@ -1,4 +1,5 @@
 mod herdr;
+mod quota;
 mod sessions;
 mod topics;
 mod transcript;
@@ -29,6 +30,7 @@ struct AppState {
     profiles: Mutex<Option<(Instant, Vec<Profile>)>>,
     herdr: Mutex<HerdrCache>,
     topics: topics::Topics,
+    quota: quota::QuotaCache,
     /// Wann ein vollständig gelesenes Transkript zuletzt gebraucht wurde; zum Aufräumen von `details`
     detail_used: Mutex<HashMap<String, Instant>>,
 }
@@ -287,6 +289,18 @@ async fn session_detail(session_id: String, state: tauri::State<'_, AppState>) -
     Ok(Detail { session_id, live, status, account, herdr, topic, title_pending, stats })
 }
 
+/// Plan quota per logged-in account. Blocking (keychain + curl), so off the async workers.
+#[tauri::command]
+async fn quota(app: tauri::AppHandle) -> Result<Vec<quota::AccountQuota>, String> {
+    use tauri::Manager;
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        state.quota.current(&state.profiles())
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 async fn focus_herdr(tab_id: String) -> Result<(), String> {
     herdr::focus_tab(&tab_id)
@@ -426,7 +440,7 @@ pub fn run() {
             Ok(())
         })
         .manage(AppState::default())
-        .invoke_handler(tauri::generate_handler![overview, session_detail, focus_herdr, clear_herdr, stop_herdr, open_folder, open_session])
+        .invoke_handler(tauri::generate_handler![overview, session_detail, quota, focus_herdr, clear_herdr, stop_herdr, open_folder, open_session])
         .run(tauri::generate_context!())
         .expect("Agent Dashboard konnte nicht starten");
 }

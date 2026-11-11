@@ -6,6 +6,7 @@ import { awaitsYou, isBusy, needsApproval, usePolling } from './format'
 import { profiles } from './store'
 import ClawdLogo from './components/ClawdLogo.vue'
 import NexronLogo from './components/NexronLogo.vue'
+import QuotaMeter from './components/QuotaMeter.vue'
 import RingSpinner from './components/RingSpinner.vue'
 import SessionList from './components/SessionList.vue'
 import SessionDetail from './components/SessionDetail.vue'
@@ -63,7 +64,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         <NexronLogo :height="30" />
       </div>
 
-      <div class="ml-auto flex items-center gap-2 text-[13px]">
+      <div class="ml-auto flex items-center gap-4">
+        <QuotaMeter />
+      </div>
+
+      <div class="flex items-center gap-2 text-[13px]">
         <span
           class="flex items-center gap-1.5 rounded-full border px-3 py-1"
           :class="counts.approval ? 'border-critical/40 bg-critical/12 text-ink' : 'border-line text-ink-3'"

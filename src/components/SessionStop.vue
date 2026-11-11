@@ -38,9 +38,9 @@ onBeforeUnmount(disarm)
   <button
     class="press relative z-10 flex shrink-0 items-center gap-1 rounded-md border px-1.5 text-[12px] leading-4 font-semibold"
     :class="
-      armed || failed
-        ? 'border-critical/60 bg-critical/12 text-critical'
-        : 'border-line-strong text-ink-2 hover:border-critical/60 hover:text-critical'
+      armed
+        ? 'border-critical bg-critical text-app'
+        : 'border-critical/40 bg-critical/10 text-critical hover:border-critical/70 hover:bg-critical/20'
     "
     :title="failed || (armed ? 'Noch einmal klicken, um Claude zu stoppen' : 'Claude stoppen (wie Esc im Terminal)')"
     @click.stop="handleClick"

@@ -10,7 +10,7 @@ import SessionOpen from './SessionOpen.vue'
 import SessionStop from './SessionStop.vue'
 import StatusBadge from './StatusBadge.vue'
 import TerminalLoader from './TerminalLoader.vue'
-import { agentKind, toolKind } from '../kinds'
+import { agentKind, SAID_KIND, toolKind } from '../kinds'
 import WaveLoader from './WaveLoader.vue'
 import { accountInfo } from '../store'
 
@@ -152,15 +152,15 @@ const tool = computed(() => toolKind(action.value.tool))
       </div>
       <div class="flex h-[1lh] gap-2.5 text-[13px]" :class="waiting ? 'text-ink' : 'text-ink-3'">
         <template v-if="s.lastAction">
-          <TerminalLoader v-if="isBash" :size="16" :running="working" class="mt-px" :class="working ? 'text-warning' : waiting ? 'text-critical' : ''" />
+          <TerminalLoader v-if="isBash" :size="16" :running="working" class="mt-px" :class="waiting ? 'text-critical' : tool.text" />
           <component
-            :is="action.said ? Bot : tool.icon"
+            :is="action.said ? SAID_KIND.icon : tool.icon"
             v-else
             :key="action.tool"
             :size="16"
             :stroke-width="1.75"
             class="pop-in mt-px shrink-0"
-            :class="waiting ? 'text-critical' : action.said ? '' : tool.text"
+            :class="waiting ? 'text-critical' : action.said ? SAID_KIND.text : tool.text"
           />
           <!-- Neuer Befehl tippt sich ein wie im Terminal, alle anderen Schritte gleiten herein -->
           <p
@@ -170,8 +170,8 @@ const tool = computed(() => toolKind(action.value.tool))
             :title="action.text"
           >
             <span v-if="waiting" class="font-semibold text-critical">Fragt nach: </span>
-            <span v-else-if="action.said" class="font-medium text-ink-2">Claude: </span>
-            <span v-if="action.tool" class="mr-1.5 font-mono text-[12px]" :class="isBash ? 'text-ink-2' : tool.text">{{ action.tool }}</span>{{ action.detail }}
+            <span v-else-if="action.said" class="font-medium" :class="SAID_KIND.text">Claude: </span>
+            <span v-if="action.tool" class="mr-1.5 font-mono text-[12px]" :class="tool.text">{{ action.tool }}</span>{{ action.detail }}
           </p>
         </template>
         <SessionStop v-if="working && s.live && s.herdr" :pane-id="s.herdr.paneId" class="ml-auto" />
@@ -180,7 +180,7 @@ const tool = computed(() => toolKind(action.value.tool))
 
     <div v-if="s.agentsTotal" class="mt-4 border-t border-line pt-4">
       <p class="flex items-center gap-2 text-[13px] font-semibold text-ink-2">
-        <Bot :size="15" :stroke-width="2" class="text-series-3" />
+        <Bot :size="15" :stroke-width="2" class="text-series-7" />
         {{ s.agentsTotal }} {{ s.agentsTotal === 1 ? 'Subagent' : 'Subagents' }}
         <span v-if="s.agentsRunning" class="font-medium text-warning">· {{ s.agentsRunning }} {{ s.agentsRunning === 1 ? 'läuft' : 'laufen' }}</span>
       </p>

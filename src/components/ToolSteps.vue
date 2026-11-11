@@ -64,7 +64,7 @@ const isCurrent = (gi: number, si: number, g: Group) => props.working && gi === 
           <span class="w-[2px] shrink-0 rounded-full bg-line-strong" aria-hidden="true" />
           <ul class="min-w-0 flex-1 space-y-1 py-1">
             <li v-for="(st, si) in g.tools" :key="si" class="flex items-center gap-2.5 text-[13px]" :class="{ 'pl-4': st.sidechain }">
-              <Bot v-if="st.sidechain" :size="13" :stroke-width="2" class="shrink-0 text-series-3" aria-label="Subagent" />
+              <Bot v-if="st.sidechain" :size="13" :stroke-width="2" class="shrink-0 text-series-7" aria-label="Subagent" />
               <span class="w-40 shrink-0">
                 <span
                   class="inline-flex max-w-full items-center gap-1 rounded px-1.5 align-middle font-mono text-[12px]"

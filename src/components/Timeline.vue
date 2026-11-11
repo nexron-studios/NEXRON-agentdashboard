@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Stats } from '../api'
 import { time } from '../format'
+import { agentKind, toolKind } from '../kinds'
 
 const props = defineProps<{ stats: Stats; now: number; live: boolean }>()
 
@@ -88,9 +89,12 @@ const ticks = computed(() => {
           {{ r.label }}
         </button>
       </div>
-      <span class="flex items-center gap-1.5 text-ink-2"><span class="h-2.5 w-2.5 rounded-full bg-series-2" /> Anfrage</span>
-      <span class="flex items-center gap-1.5 text-ink-2"><span class="h-2.5 w-2.5 rounded-full bg-series-1" /> Tool-Aufruf</span>
-      <span class="flex items-center gap-1.5 text-ink-2"><span class="h-2.5 w-4 rounded-sm bg-series-3" /> Subagent</span>
+      <span class="flex items-center gap-1.5 text-ink-2"><span class="h-2.5 w-2.5 rounded-full bg-ink" /> Anfrage</span>
+      <span class="flex items-center gap-1.5 text-ink-2">
+        <span class="flex -space-x-1"><span class="h-2.5 w-2.5 rounded-full bg-series-1" /><span class="h-2.5 w-2.5 rounded-full bg-series-2" /><span class="h-2.5 w-2.5 rounded-full bg-series-4" /></span>
+        Tool-Aufruf, Farbe je Art
+      </span>
+      <span class="flex items-center gap-1.5 text-ink-2"><span class="h-2.5 w-4 rounded-sm bg-series-7" /> Subagent</span>
       <span class="flex items-center gap-1.5 text-ink-2"><span class="font-bold text-critical">✕</span> Fehler</span>
       <span class="num ml-auto min-h-[1.2em] truncate text-ink">{{ hover }}</span>
     </div>
@@ -117,7 +121,7 @@ const ticks = computed(() => {
       </g>
 
       <g v-for="b in bars" :key="b.id" @mouseenter="hover = `${time(b.started)}–${b.finished ? time(b.finished) : 'läuft'} · ${b.agentType}: ${b.description}`">
-        <rect :x="b.x1" :y="b.cy - 6" :width="b.w" height="12" rx="4" fill="var(--color-series-3)" :opacity="b.status === 'running' ? 0.65 : 1" />
+        <rect :x="b.x1" :y="b.cy - 6" :width="b.w" height="12" rx="4" :fill="agentKind(b.agentType).color" :opacity="b.status === 'running' ? 0.65 : 1" />
         <rect :x="b.x1" :y="b.cy - LANE_H / 2" :width="b.w" :height="LANE_H" fill="transparent" />
       </g>
 
@@ -135,7 +139,7 @@ const ticks = computed(() => {
           :cx="m.cx"
           :cy="m.cy"
           r="5"
-          :fill="m.kind === 'prompt' ? 'var(--color-series-2)' : 'var(--color-series-1)'"
+          :fill="m.kind === 'prompt' ? 'var(--color-ink)' : toolKind(m.label).color"
           stroke="var(--color-surface)"
           stroke-width="2"
           :opacity="m.sidechain ? 0.5 : 1"

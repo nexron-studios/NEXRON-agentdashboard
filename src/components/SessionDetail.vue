@@ -287,7 +287,7 @@ const errors = computed(() => [...(s.value?.errors ?? [])].reverse().slice(0, 40
 
       <section v-if="s.agents.length" class="card enter mt-4 p-6" style="--i: 5">
         <h2 class="flex items-center gap-2 text-[16px] font-semibold">
-          <Bot :size="18" :stroke-width="2" class="text-series-3" /> Subagents
+          <Bot :size="18" :stroke-width="2" class="text-series-7" /> Subagents
           <span class="num rounded-full bg-surface-2 px-2 text-[13px] font-medium text-ink-2">{{ s.agents.length }}</span>
         </h2>
         <div class="mt-3 flex flex-wrap gap-1.5">

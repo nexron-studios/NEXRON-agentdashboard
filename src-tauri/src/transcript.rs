@@ -11,10 +11,11 @@ use std::fs::{self, File};
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
+use crate::steps::{self, Step};
+
 const MAX_EVENTS: usize = 6000;
-/// So viele Schritte (Anfragen und Tool-Aufrufe mit Detail) behält der Ablauf in der Detailansicht.
-const MAX_STEPS: usize = 120;
-const STEP_CHARS: usize = 240;
+/// So viele Schritte (Anfragen, Zwischenschritte, Tool-Aufrufe) behält der Ablauf in der Detailansicht.
+const MAX_STEPS: usize = 200;
 const MAX_ERRORS: usize = 200;
 const MAX_PROMPTS: usize = 300;
 const PROMPT_CHARS: usize = 4000;
@@ -22,8 +23,6 @@ const PROMPT_CHARS: usize = 4000;
 const HEAD_BYTES: u64 = 400_000;
 const DEFAULT_WINDOW: u64 = 200_000;
 const LARGE_WINDOW: u64 = 1_000_000;
-/// Felder, die einen Tool-Aufruf in einer Zeile am besten beschreiben, in dieser Reihenfolge.
-const INPUT_KEYS: [&str; 7] = ["description", "command", "file_path", "pattern", "url", "query", "prompt"];
 const TASK_NOTIFICATION: &str = "<task-notification>";
 /// Zeilentypen, die nichts für das Dashboard enthalten, aber den Großteil der Datei ausmachen.
 const SKIPPED_PREFIXES: [&[u8]; 3] = [br#"{"type":"api-request"#, br#"{"type":"attachment""#, br#"{"type":"file-history"#];
@@ -77,21 +76,6 @@ pub struct Event {
     pub sidechain: bool,
 }
 
-/// Ein Schritt im Ablauf: eine eigene Anfrage oder ein Tool-Aufruf samt dem, worauf er zielt.
-#[derive(Serialize, Clone, Debug, PartialEq)]
-pub struct Step {
-    pub t: i64,
-    /// prompt | tool
-    pub kind: &'static str,
-    /// Tool-Name oder Anfragetext
-    pub label: String,
-    pub detail: String,
-    pub sidechain: bool,
-    pub failed: bool,
-    #[serde(skip)]
-    tool_use_id: String,
-}
-
 #[derive(Serialize, Clone, Debug, PartialEq)]
 pub struct Prompt {
     pub t: i64,
@@ -138,7 +122,7 @@ pub struct Stats {
     pub errors: Vec<ErrorItem>,
     pub error_count: u32,
     pub events: Vec<Event>,
-    /// Die letzten Anfragen und Tool-Aufrufe, älteste zuerst.
+    /// Die letzten Anfragen, Zwischenschritte und Tool-Aufrufe, älteste zuerst; nur bei vollständig gelesenen Transkripten.
     pub steps: Vec<Step>,
     /// Eigene Anfragen in voller Länge (bis 4000 Zeichen), älteste zuerst.
     pub prompt_log: Vec<Prompt>,
@@ -197,6 +181,8 @@ impl Transcript {
         let mut t = Transcript::open(path.to_path_buf());
         t.ingest(&buf); // die erste Zeile ist abgeschnitten und wird beim Parsen verworfen
         t.stats.file_bytes = len;
+        // Die Liste braucht keinen Ablauf, und mit Eingaben und Ergebnissen ist er pro Session mehrere hundert KB groß.
+        t.stats.steps.clear();
         if len > bytes {
             // Die erste Anfrage steht am Dateianfang, außerhalb des gelesenen Endes.
             let mut head = Transcript::open(path.to_path_buf());
@@ -281,8 +267,12 @@ impl Transcript {
         for block in content {
             match block["type"].as_str() {
                 Some("tool_use") => action = Some(self.tool_use(block, t, sidechain)),
-                Some("text") if action.is_none() => {
-                    if let Some(text) = block["text"].as_str().filter(|s| !s.trim().is_empty()) {
+                Some("text") => {
+                    let Some(text) = block["text"].as_str().filter(|s| !s.trim().is_empty()) else { continue };
+                    if !sidechain {
+                        self.stats.steps.push(Step::thought(t, text));
+                    }
+                    if action.is_none() {
                         action = Some(format!("💬 {}", one_line(text)));
                     }
                 }
@@ -345,17 +335,8 @@ impl Transcript {
         }
         self.tool_names.insert(id.clone(), name.clone());
 
-        let detail = INPUT_KEYS.iter().find_map(|k| input[*k].as_str().filter(|s| !s.is_empty())).map(one_line);
-        s.steps.push(Step {
-            t,
-            kind: "tool",
-            label: name.clone(),
-            detail: cut(detail.as_deref().unwrap_or(""), STEP_CHARS),
-            sidechain,
-            failed: false,
-            tool_use_id: id,
-        });
-        match detail {
+        s.steps.push(Step::tool(t, &name, &id, input, sidechain));
+        match steps::summary(input) {
             Some(detail) => format!("{name}: {detail}"),
             None => name,
         }
@@ -385,12 +366,10 @@ impl Transcript {
     fn tool_result(&mut self, b: &Value, v: &Value, t: i64, sidechain: bool) {
         let id = b["tool_use_id"].as_str().unwrap_or("");
         let failed = b["is_error"].as_bool().unwrap_or(false);
+        steps::finish(&mut self.stats.steps, id, failed, &b["content"], &v["toolUseResult"]);
         if failed {
-            if let Some(step) = self.stats.steps.iter_mut().rev().find(|st| st.tool_use_id == id) {
-                step.failed = true;
-            }
             let source = self.tool_names.get(id).cloned().unwrap_or_else(|| "Tool".into());
-            self.error(t, source, text_of(&b["content"]), sidechain);
+            self.error(t, source, steps::text_of(&b["content"]), sidechain);
         }
         if let Some(&i) = self.agent_index.get(id) {
             let result = &v["toolUseResult"];
@@ -453,7 +432,7 @@ impl Transcript {
             s.current_task_is_first = s.prompts == 1;
         }
         s.events.push(Event { t, kind: "prompt", label: cut(&one_line(text), 160), sidechain: false });
-        s.steps.push(Step { t, kind: "prompt", label: cut(&one_line(text), STEP_CHARS), detail: String::new(), sidechain: false, failed: false, tool_use_id: String::new() });
+        s.steps.push(Step::prompt(t, text));
         s.prompt_log.push(Prompt { t, text: full });
     }
 
@@ -539,25 +518,17 @@ fn short_tool_name(name: &str) -> String {
     name.rsplit("__").next().unwrap_or(name).to_string()
 }
 
-fn text_of(content: &Value) -> String {
-    match content {
-        Value::String(s) => s.clone(),
-        Value::Array(blocks) => blocks.iter().filter_map(|b| b["text"].as_str()).collect::<Vec<_>>().join("\n"),
-        _ => String::new(),
-    }
-}
-
 fn between<'a>(text: &'a str, start: &str, end: &str) -> Option<&'a str> {
     let from = text.find(start)? + start.len();
     let to = text[from..].find(end)? + from;
     Some(text[from..to].trim())
 }
 
-fn one_line(text: &str) -> String {
+pub(crate) fn one_line(text: &str) -> String {
     cut(&text.split_whitespace().collect::<Vec<_>>().join(" "), 400)
 }
 
-fn cut(text: &str, max_chars: usize) -> String {
+pub(crate) fn cut(text: &str, max_chars: usize) -> String {
     match text.char_indices().nth(max_chars) {
         Some((i, _)) => format!("{}…", &text[..i]),
         None => text.to_string(),
@@ -622,7 +593,13 @@ mod tests {
         assert_eq!(a.finished, parse_time("2026-11-02T10:05:00Z"));
         assert_eq!(s.last_t - s.first_t, 5 * 60 * 1000);
         let steps: Vec<_> = s.steps.iter().map(|st| (st.kind, st.label.as_str(), st.detail.as_str(), st.failed)).collect();
-        assert_eq!(steps, [("prompt", "fix den Login", "", false), ("tool", "Bash", "Run tests", true), ("tool", "Agent", "Tests reparieren", false)]);
+        assert_eq!(steps, [
+            ("prompt", "fix den Login", "", false),
+            ("thought", "Ich schaue nach.", "", false),
+            ("tool", "Bash", "Run tests", true),
+            ("tool", "Agent", "Tests reparieren", false),
+        ]);
+        assert_eq!(s.steps[2].output, "Exit code 1\nFAIL login.spec");
     }
 
     #[test]
@@ -655,6 +632,9 @@ mod tests {
         println!("{:?} | prompts {} turns {} tools {} errors {} agents {} events {}", s.title, s.prompts, s.turns, s.tool_calls, s.error_count, s.agents.len(), s.events.len());
         println!("models {:?}\ncontext {:?}\ncost {:?}", s.models, s.context, s.cost.as_ref().map(|c| c.total_usd));
         println!("steps {} last {:?}", s.steps.len(), s.steps.iter().rev().take(3).map(|st| (st.kind, &st.label, &st.detail, st.failed)).collect::<Vec<_>>());
+        let kinds = ["prompt", "thought", "tool"].map(|k| s.steps.iter().filter(|st| st.kind == k).count());
+        let sources: usize = s.steps.iter().map(|st| st.sources.len()).sum();
+        println!("steps prompt/thought/tool {:?}, sources {sources}, JSON {} KB", kinds, serde_json::to_string(&s.steps).unwrap().len() / 1000);
         println!("agents {:?}", s.agents.iter().map(|a| (&a.description, &a.status, &a.model)).collect::<Vec<_>>());
     }
 

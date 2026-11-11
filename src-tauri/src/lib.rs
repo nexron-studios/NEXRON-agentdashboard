@@ -1,6 +1,8 @@
+mod favicon;
 mod herdr;
 mod quota;
 mod sessions;
+mod steps;
 mod topics;
 mod transcript;
 mod window;
@@ -334,6 +336,32 @@ async fn open_folder(path: String) -> Result<(), String> {
         .map_err(|e| format!("Explorer ließ sich nicht öffnen: {e}"))
 }
 
+/// Favicon einer Quelle als `data:`-URL; `None`, wenn die Seite keins hat. Blockiert (curl, Datei-Cache).
+#[tauri::command]
+async fn favicon(domain: String, app: tauri::AppHandle) -> Result<Option<String>, String> {
+    use tauri::Manager;
+    let cache_dir = app.path().app_cache_dir().map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || favicon::data_url(&cache_dir, &domain))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Öffnet eine Quelle im Standardbrowser. Nur http(s) und ohne Leerzeichen, damit aus dem
+/// Transkript nie ein Programm oder eine lokale Datei gestartet wird.
+#[tauri::command]
+async fn open_url(url: String) -> Result<(), String> {
+    let is_web = url.starts_with("https://") || url.starts_with("http://");
+    if !is_web || url.chars().any(char::is_whitespace) {
+        return Err(format!("Keine Web-Adresse: {url}"));
+    }
+    let opener = if cfg!(windows) { "explorer" } else if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
+    std::process::Command::new(opener)
+        .arg(&url)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("Browser ließ sich nicht öffnen: {e}"))
+}
+
 /// „Öffnen“ für Sessions ohne herdr-Tab. VS Code: `code <ordner>` holt genau das Fenster mit diesem
 /// Projekt nach vorne (alle VS-Code-Fenster gehören demselben Prozess, das Fenster ließe sich sonst
 /// nicht unterscheiden). Sonst das Terminal-Fenster, in dem der Claude-Prozess läuft.
@@ -440,7 +468,7 @@ pub fn run() {
             Ok(())
         })
         .manage(AppState::default())
-        .invoke_handler(tauri::generate_handler![overview, session_detail, quota, focus_herdr, clear_herdr, stop_herdr, open_folder, open_session])
+        .invoke_handler(tauri::generate_handler![overview, session_detail, quota, focus_herdr, clear_herdr, stop_herdr, open_folder, open_session, favicon, open_url])
         .run(tauri::generate_context!())
         .expect("Agent Dashboard konnte nicht starten");
 }

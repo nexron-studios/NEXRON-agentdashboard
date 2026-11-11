@@ -92,13 +92,33 @@ export interface TimelineEvent {
   sidechain: boolean
 }
 
+export interface StepField {
+  key: string
+  value: string
+}
+
+export interface Source {
+  url: string
+  domain: string
+  /** Seitentitel; nur WebSearch liefert einen */
+  title: string
+  /** Bei WebFetch Claudes Zusammenfassung der Seite */
+  description: string
+}
+
 export interface Step {
   t: number
-  kind: 'prompt' | 'tool'
+  /** `thought` ist Text, den Claude zwischen zwei Tool-Aufrufen schreibt */
+  kind: 'prompt' | 'thought' | 'tool'
   label: string
   detail: string
   sidechain: boolean
   failed: boolean
+  /** Das Ergebnis des Tool-Aufrufs ist da */
+  done: boolean
+  input: StepField[]
+  output: string
+  sources: Source[]
 }
 
 export interface Cost {
@@ -175,6 +195,8 @@ export const stopHerdr = (paneId: string) => invoke<void>('stop_herdr', { paneId
 export const openFolder = (path: string) => invoke<void>('open_folder', { path })
 export const openSession = (pid: number | null, cwd: string, entrypoint: string) =>
   invoke<void>('open_session', { pid, cwd, entrypoint })
+export const fetchFavicon = (domain: string) => invoke<string | null>('favicon', { domain })
+export const openUrl = (url: string) => invoke<void>('open_url', { url })
 
 export interface QuotaWindow {
   key: string

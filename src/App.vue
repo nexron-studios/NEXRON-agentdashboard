@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { ArrowLeft, CircleAlert, CircleCheck, LoaderCircle } from 'lucide-vue-next'
+import { ArrowLeft, CircleAlert, CircleCheck } from 'lucide-vue-next'
 import { fetchOverview, type Overview } from './api'
 import { awaitsYou, isBusy, needsApproval, usePolling } from './format'
 import { profiles } from './store'
 import ClawdLogo from './components/ClawdLogo.vue'
 import NexronLogo from './components/NexronLogo.vue'
+import RingSpinner from './components/RingSpinner.vue'
 import SessionList from './components/SessionList.vue'
 import SessionDetail from './components/SessionDetail.vue'
 import TitleTooltips from './components/TitleTooltips.vue'
@@ -72,7 +73,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           <b class="num">{{ counts.approval }}</b> Freigabe
         </span>
         <span class="flex items-center gap-1.5 rounded-full border border-line px-3 py-1 text-ink-2">
-          <LoaderCircle :size="15" :stroke-width="2.25" class="text-warning" :class="{ spin: counts.busy }" />
+          <RingSpinner :size="15" class="text-warning" :spinning="!!counts.busy" />
           <b class="num text-ink">{{ counts.busy }}</b> arbeiten
         </span>
         <span

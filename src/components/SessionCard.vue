@@ -77,8 +77,8 @@ const action = computed(() => {
     </div>
 
     <!-- Jeder Textbereich hat eine feste Zeilenzahl: Ändert sich der Text, bleibt die Karte gleich hoch. -->
-    <h3 class="mt-4 truncate text-[17px] leading-snug font-semibold tracking-tight" :class="{ 'text-ink-3': fresh || head.pending }">
-      <button class="card-link text-left" :title="fresh || head.pending ? undefined : head.text" @click="emit('open')">
+    <h3 class="mt-4 text-[17px] leading-snug font-semibold tracking-tight" :class="{ 'text-ink-3': fresh || head.pending }">
+      <button class="card-link block w-full truncate text-left" :title="fresh || head.pending ? undefined : head.text" @click="emit('open')">
         {{ fresh ? 'Neue Session' : head.pending ? PENDING_TITLE : head.text }}
       </button>
     </h3>

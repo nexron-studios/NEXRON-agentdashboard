@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Circle, CircleAlert, CircleCheck, CircleStop, LoaderCircle, SquareTerminal } from 'lucide-vue-next'
+import { Circle, CircleAlert, CircleCheck, CircleStop, SquareTerminal } from 'lucide-vue-next'
+import RingSpinner from './RingSpinner.vue'
 
 /** `fresh`: Session ohne eigene Anfrage. „idle“ heißt dann „bereit“, nicht „wartet auf dich“. */
 const props = defineProps<{ status: string; fresh?: boolean; size?: 'sm' | 'md' }>()
 
 const STATES = {
   blocked: { label: 'Braucht Freigabe', icon: CircleAlert, text: 'text-critical', bg: 'bg-critical/12 border-critical/40' },
-  busy: { label: 'Arbeitet', icon: LoaderCircle, text: 'text-warning', bg: 'bg-warning/10 border-warning/30' },
+  busy: { label: 'Arbeitet', icon: RingSpinner, text: 'text-warning', bg: 'bg-warning/10 border-warning/30' },
   shell: { label: 'Führt Befehl aus', icon: SquareTerminal, text: 'text-warning', bg: 'bg-warning/10 border-warning/30' },
   waiting: { label: 'Aufgabe abgeschlossen', icon: CircleCheck, text: 'text-good', bg: 'bg-good/12 border-good/35' },
   ready: { label: 'Bereit', icon: Circle, text: 'text-ink-2', bg: 'bg-surface-2 border-line-strong' },
@@ -31,7 +32,7 @@ const state = computed(() => {
     :class="[state.bg, state.text, size === 'sm' ? 'px-2 py-0.5 text-[12px]' : 'px-2.5 py-1 text-[13px]']"
   >
     <span class="relative inline-flex" :class="{ attention: state === STATES.blocked }">
-      <component :is="state.icon" :size="size === 'sm' ? 13 : 15" :stroke-width="2.25" :class="{ spin: state === STATES.busy }" />
+      <component :is="state.icon" :size="size === 'sm' ? 13 : 15" :stroke-width="2.25" />
     </span>
     {{ size === 'sm' && state === STATES.waiting ? 'Fertig' : state.label }}
   </span>

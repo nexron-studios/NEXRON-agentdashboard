@@ -72,7 +72,7 @@ const isCurrent = (gi: number, si: number, g: Group) => props.working && gi === 
                   :aria-label="st.failed ? `${st.label} ist fehlgeschlagen` : undefined"
                 ><component :is="toolKind(st.label).icon" :size="12" :stroke-width="2.25" class="shrink-0" :class="{ [toolKind(st.label).text]: !st.failed }" /><span class="truncate" :title="st.label">{{ st.label }}</span></span>
               </span>
-              <span class="min-w-0 flex-1 truncate" :class="isCurrent(gi, si, g) ? 'shimmer' : 'text-ink-3'" :title="st.detail">{{ st.detail }}</span>
+              <span class="min-w-0 flex-1 truncate" :class="isCurrent(gi, si, g) ? 'shimmer' : 'text-ink-2'" :title="st.detail">{{ st.detail }}</span>
               <span class="num shrink-0 text-[12px] text-ink-3">{{ time(st.t) }}</span>
             </li>
           </ul>

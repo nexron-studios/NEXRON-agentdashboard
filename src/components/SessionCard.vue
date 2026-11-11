@@ -150,7 +150,7 @@ const tool = computed(() => toolKind(action.value.tool))
           {{ showLast ? plainPrompt(s.lastPrompt) : '' }}
         </p>
       </div>
-      <div class="flex h-[1lh] gap-2.5 text-[13px]" :class="waiting ? 'text-ink' : 'text-ink-3'">
+      <div class="flex h-[1lh] gap-2.5 text-[13px]" :class="waiting ? 'text-ink' : 'text-ink-2'">
         <template v-if="s.lastAction">
           <TerminalLoader v-if="isBash" :size="16" :running="working" class="mt-px" :class="waiting ? 'text-critical' : tool.text" />
           <component
@@ -170,8 +170,8 @@ const tool = computed(() => toolKind(action.value.tool))
             :title="action.text"
           >
             <span v-if="waiting" class="font-semibold text-critical">Fragt nach: </span>
-            <span v-else-if="action.said" class="font-medium text-ink-2">Claude: </span>
-            <span v-if="action.tool" class="mr-1.5 font-mono text-[12px] text-ink-2">{{ action.tool }}</span>{{ action.detail }}
+            <span v-else-if="action.said" class="font-medium text-ink">Claude: </span>
+            <span v-if="action.tool" class="mr-1.5 font-mono text-[12px] text-ink">{{ action.tool }}</span>{{ action.detail }}
           </p>
         </template>
         <SessionStop v-if="working && s.live && s.herdr" :pane-id="s.herdr.paneId" class="ml-auto" />
@@ -198,7 +198,7 @@ const tool = computed(() => toolKind(action.value.tool))
           <span class="flex shrink-0 items-center gap-1 rounded px-1.5 text-[12px] font-medium" :class="KIND_CHIP">
             <component :is="agentKind(a.agentType).icon" :size="12" :stroke-width="2.25" :class="agentKind(a.agentType).text" />{{ a.agentType }}
           </span>
-          <span class="min-w-0 flex-1 truncate" :class="a.status === 'running' ? 'shimmer text-ink' : 'text-ink-3'">{{ a.description }}</span>
+          <span class="min-w-0 flex-1 truncate" :class="a.status === 'running' ? 'shimmer text-ink' : 'text-ink-2'">{{ a.description }}</span>
           <span class="num shrink-0 text-[12px] text-ink-3">{{ duration((a.finished ?? now) - a.started) }}</span>
         </li>
       </ul>

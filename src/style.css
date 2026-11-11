@@ -10,7 +10,8 @@
  *   2 Status     warning   arbeitet          good  fertig
  *   3 Aktivität  act-*     was Claude gerade tut, nur auf Icons, Text bleibt neutral
  *                          read: liest, sucht · change: schreibt, führt aus · outside: Web, MCP
- *   – Inhalt     ink-*     alles andere, auch Claudes eigener Text, Todos, Skills
+ *   – Inhalt     ink, ink-2  was gesagt und getan wird: Anfragen, Claudes Text, Tool-Ziele, Subagent-Aufgaben
+ *   – Meta       ink-3       Zeiten, Zähler, Modell, Beschriftungen, Abschnitts-Icons
  *   – Marke      brand     nur Logo und Clawd
  *   – Daten      series-*  nur in Diagrammen und für Konto-Punkte; series-1 auch für Fokus
  *

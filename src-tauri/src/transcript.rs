@@ -21,6 +21,7 @@ const DEFAULT_WINDOW: u64 = 200_000;
 const LARGE_WINDOW: u64 = 1_000_000;
 /// Felder, die einen Tool-Aufruf in einer Zeile am besten beschreiben, in dieser Reihenfolge.
 const INPUT_KEYS: [&str; 7] = ["description", "command", "file_path", "pattern", "url", "query", "prompt"];
+const TASK_NOTIFICATION: &str = "<task-notification>";
 /// Zeilentypen, die nichts für das Dashboard enthalten, aber den Großteil der Datei ausmachen.
 const SKIPPED_PREFIXES: [&[u8]; 3] = [br#"{"type":"api-request"#, br#"{"type":"attachment""#, br#"{"type":"file-history"#];
 
@@ -231,6 +232,7 @@ impl Transcript {
             "system" if v["subtype"] == "compact_boundary" => s.compactions += 1,
             "assistant" => self.assistant(v, t),
             "user" => self.user(v, t),
+            "attachment" => self.attachment(v, t),
             _ => {}
         }
     }
@@ -366,23 +368,38 @@ impl Transcript {
         }
     }
 
+    /// Since Claude Code 2.1.3xx a background agent's completion arrives as a
+    /// `queued_command` attachment instead of a user message.
+    fn attachment(&mut self, v: &Value, t: i64) {
+        let a = &v["attachment"];
+        if a["type"] != "queued_command" {
+            return;
+        }
+        if let Some(text) = a["prompt"].as_str().map(str::trim_start).filter(|s| s.starts_with(TASK_NOTIFICATION)) {
+            self.task_notification(text, t);
+        }
+    }
+
+    fn task_notification(&mut self, text: &str, t: i64) {
+        let (Some(id), Some(status)) = (between(text, "<tool-use-id>", "</tool-use-id>"), between(text, "<status>", "</status>")) else {
+            return;
+        };
+        let Some(&i) = self.agent_index.get(id) else { return };
+        let agent = &mut self.stats.agents[i];
+        agent.finished = Some(t);
+        agent.status = match status {
+            "completed" => "done",
+            "failed" => "failed",
+            "killed" | "stopped" => "stopped",
+            other => other,
+        }
+        .into();
+    }
+
     fn user_text(&mut self, text: &str, v: &Value, t: i64) {
         let text = text.trim_start();
-        if text.starts_with("<task-notification>") {
-            let (Some(id), Some(status)) = (between(text, "<tool-use-id>", "</tool-use-id>"), between(text, "<status>", "</status>")) else {
-                return;
-            };
-            if let Some(&i) = self.agent_index.get(id) {
-                let agent = &mut self.stats.agents[i];
-                agent.finished = Some(t);
-                agent.status = match status {
-                    "completed" => "done",
-                    "failed" => "failed",
-                    "killed" | "stopped" => "stopped",
-                    other => other,
-                }
-                .into();
-            }
+        if text.starts_with(TASK_NOTIFICATION) {
+            self.task_notification(text, t);
             return;
         }
         if v["isMeta"].as_bool() == Some(true) || text.is_empty() || text.starts_with('<') {
@@ -566,6 +583,23 @@ mod tests {
         assert_eq!((a.status.as_str(), a.model.as_str(), a.background), ("done", "claude-sonnet-5-5", true));
         assert_eq!(a.finished, parse_time("2026-11-02T10:05:00Z"));
         assert_eq!(s.last_t - s.first_t, 5 * 60 * 1000);
+    }
+
+    #[test]
+    fn finishes_agent_from_queued_command_attachment() {
+        let data = lines(&[
+            assistant("m1", "2026-11-11T09:09:27Z", json!([{"type": "tool_use", "id": "a1", "name": "Agent",
+                "input": {"description": "Check citations", "run_in_background": true, "prompt": "…"}}]), 7),
+            json!({"type": "user", "timestamp": "2026-11-11T09:09:36Z", "toolUseResult": {"status": "async_launched"},
+                "message": {"content": [{"type": "tool_result", "tool_use_id": "a1", "content": "gestartet"}]}}),
+            json!({"parentUuid": "p1", "isSidechain": false, "type": "attachment", "timestamp": "2026-11-11T09:23:40Z",
+                "attachment": {"type": "queued_command", "prompt":
+                    "<task-notification>\n<task-id>x</task-id>\n<tool-use-id>a1</tool-use-id>\n<status>completed</status>\n</task-notification>"}}),
+        ]);
+        let mut t = Transcript::default();
+        t.ingest(&data);
+        let a = &t.stats.agents[0];
+        assert_eq!((a.status.as_str(), a.finished), ("done", parse_time("2026-11-11T09:23:40Z")));
     }
 
     /// `AGENTDASHBOARD_SAMPLE=<pfad.jsonl> cargo test --release -- --ignored --nocapture`

@@ -26,8 +26,8 @@ async function open() {
     @click.stop="open"
   >
     <span class="relative inline-flex shrink-0" :style="{ width: `${size ?? 14}px`, height: `${size ?? 14}px` }">
-      <Folder :size="size ?? 14" :stroke-width="1.75" class="folder-closed absolute text-series-1" />
-      <FolderOpen :size="size ?? 14" :stroke-width="1.75" class="folder-open absolute text-series-1" />
+      <Folder :size="size ?? 14" :stroke-width="1.75" class="folder-closed absolute text-ink-3" />
+      <FolderOpen :size="size ?? 14" :stroke-width="1.75" class="folder-open absolute text-ink-3" />
     </span>
     <span class="truncate">{{ projectName(path) }}</span>
   </button>

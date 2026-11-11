@@ -16,7 +16,7 @@ import {
   Wrench,
 } from 'lucide-vue-next'
 import { fetchDetail, type Detail } from '../api'
-import { agentKind, toolKind } from '../kinds'
+import { agentKind, KIND_CHIP, toolKind } from '../kinds'
 import { date, duration, headline, modelName, PENDING_TITLE, time, tokens, usd, usePolling } from '../format'
 import FolderLink from './FolderLink.vue'
 import SessionClear from './SessionClear.vue'
@@ -144,7 +144,7 @@ const errors = computed(() => [...(s.value?.errors ?? [])].reverse().slice(0, 40
       <div class="mt-7 grid gap-4 lg:grid-cols-2">
         <section class="card enter p-6" style="--i: 1">
           <div class="flex items-center justify-between">
-            <h2 class="flex items-center gap-2 text-[16px] font-semibold"><Gauge :size="18" :stroke-width="2" class="text-series-1" /> Kontextfenster</h2>
+            <h2 class="flex items-center gap-2 text-[16px] font-semibold"><Gauge :size="18" :stroke-width="2" class="text-ink-3" /> Kontextfenster</h2>
             <span v-if="ctx" class="rounded-md bg-surface-2 px-2 py-0.5 text-[12px] font-medium text-ink-2">{{ modelName(ctx.model) }}</span>
           </div>
           <template v-if="ctx">
@@ -175,7 +175,7 @@ const errors = computed(() => [...(s.value?.errors ?? [])].reverse().slice(0, 40
         </section>
 
         <section class="card enter p-6" style="--i: 2">
-          <h2 class="flex items-center gap-2 text-[16px] font-semibold"><Wrench :size="18" :stroke-width="2" class="text-series-1" /> Tool-Nutzung</h2>
+          <h2 class="flex items-center gap-2 text-[16px] font-semibold"><Wrench :size="18" :stroke-width="2" class="text-ink-3" /> Tool-Nutzung</h2>
           <p class="mt-1 text-[13px] text-ink-3">{{ tools.length }} Tools · {{ s.toolCalls }} Aufrufe</p>
           <!-- Zwölf Zeilen sichtbar, der Rest scrollt, damit die Karte so hoch bleibt wie das Kontextfenster daneben -->
           <div class="mt-4 max-h-[calc(12*--spacing(6)+11*--spacing(1.5))] space-y-1.5 scroll-thin overflow-y-auto overscroll-contain pr-1.5">
@@ -201,7 +201,7 @@ const errors = computed(() => [...(s.value?.errors ?? [])].reverse().slice(0, 40
 
       <section v-if="prompts.length" class="card enter mt-4 p-6" style="--i: 3">
         <h2 class="flex items-center gap-2 text-[16px] font-semibold">
-          <MessagesSquare :size="18" :stroke-width="2" class="text-brand" /> Deine Anfragen
+          <MessagesSquare :size="18" :stroke-width="2" class="text-ink-3" /> Deine Anfragen
           <span class="num rounded-full bg-surface-2 px-2 text-[13px] font-medium text-ink-2">{{ prompts.length }}</span>
         </h2>
         <ol class="mt-4 space-y-2">
@@ -232,7 +232,7 @@ const errors = computed(() => [...(s.value?.errors ?? [])].reverse().slice(0, 40
 
       <section class="card enter mt-4 p-6" style="--i: 4">
         <div class="flex items-center justify-between">
-          <h2 class="flex items-center gap-2 text-[16px] font-semibold"><Coins :size="18" :stroke-width="2" class="text-series-4" /> Tokens &amp; Kosten</h2>
+          <h2 class="flex items-center gap-2 text-[16px] font-semibold"><Coins :size="18" :stroke-width="2" class="text-ink-3" /> Tokens &amp; Kosten</h2>
           <span class="num font-display text-[28px] leading-none font-semibold">{{ s.cost ? '~' + usd(s.cost.totalUsd) : tokens(totalTokens) + ' Tokens' }}</span>
         </div>
         <div class="mt-5 flex h-3.5 gap-[2px] overflow-hidden rounded-[4px]">
@@ -284,12 +284,12 @@ const errors = computed(() => [...(s.value?.errors ?? [])].reverse().slice(0, 40
 
       <section v-if="s.agents.length" class="card enter mt-4 p-6" style="--i: 5">
         <h2 class="flex items-center gap-2 text-[16px] font-semibold">
-          <Bot :size="18" :stroke-width="2" class="text-series-7" /> Subagents
+          <Bot :size="18" :stroke-width="2" class="text-ink-3" /> Subagents
           <span class="num rounded-full bg-surface-2 px-2 text-[13px] font-medium text-ink-2">{{ s.agents.length }}</span>
         </h2>
         <div class="mt-3 flex flex-wrap gap-1.5">
-          <span v-for="[type, n] in agentTypes" :key="type" class="flex items-center gap-1 rounded-md px-2 py-0.5 text-[12px] font-medium" :class="agentKind(type).chip">
-            <component :is="agentKind(type).icon" :size="12" :stroke-width="2.25" />{{ type }} <span class="text-ink-3">×{{ n }}</span>
+          <span v-for="[type, n] in agentTypes" :key="type" class="flex items-center gap-1 rounded-md px-2 py-0.5 text-[12px] font-medium" :class="KIND_CHIP">
+            <component :is="agentKind(type).icon" :size="12" :stroke-width="2.25" :class="agentKind(type).text" />{{ type }} <span class="text-ink-3">×{{ n }}</span>
           </span>
         </div>
         <div class="mt-4 space-y-1">
@@ -298,8 +298,8 @@ const errors = computed(() => [...(s.value?.errors ?? [])].reverse().slice(0, 40
             :key="a.id"
             class="grid grid-cols-[auto_auto_1fr_auto_auto_auto] items-center gap-3 rounded-md px-1.5 py-1.5 text-[14px] transition-colors duration-150 hover:bg-surface-2"
           >
-            <span class="flex items-center gap-1 rounded-md px-2 py-0.5 text-[12px] font-medium" :class="agentKind(a.agentType).chip">
-              <component :is="agentKind(a.agentType).icon" :size="12" :stroke-width="2.25" />{{ a.agentType }}
+            <span class="flex items-center gap-1 rounded-md px-2 py-0.5 text-[12px] font-medium" :class="KIND_CHIP">
+              <component :is="agentKind(a.agentType).icon" :size="12" :stroke-width="2.25" :class="agentKind(a.agentType).text" />{{ a.agentType }}
             </span>
             <span class="rounded-md bg-surface-2 px-2 py-0.5 text-[12px] text-ink-3">{{ a.model ? modelName(a.model) : 'erbt Modell' }}</span>
             <span class="truncate" :title="a.description">{{ a.description }}</span>
@@ -325,7 +325,7 @@ const errors = computed(() => [...(s.value?.errors ?? [])].reverse().slice(0, 40
       </section>
 
       <section class="card enter mt-4 p-6" style="--i: 7">
-        <h2 class="flex items-center gap-2 text-[16px] font-semibold"><Activity :size="18" :stroke-width="2" class="text-series-2" /> Zeitverlauf</h2>
+        <h2 class="flex items-center gap-2 text-[16px] font-semibold"><Activity :size="18" :stroke-width="2" class="text-ink-3" /> Zeitverlauf</h2>
         <Timeline class="mt-4" :stats="s" :now="now" :live="!!detail.live" />
       </section>
     </template>

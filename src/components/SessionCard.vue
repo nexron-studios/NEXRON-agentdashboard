@@ -10,7 +10,7 @@ import SessionOpen from './SessionOpen.vue'
 import SessionStop from './SessionStop.vue'
 import StatusBadge from './StatusBadge.vue'
 import TerminalLoader from './TerminalLoader.vue'
-import { agentKind, SAID_KIND, toolKind } from '../kinds'
+import { agentKind, KIND_CHIP, SAID_KIND, toolKind } from '../kinds'
 import WaveLoader from './WaveLoader.vue'
 import { accountInfo } from '../store'
 
@@ -170,8 +170,8 @@ const tool = computed(() => toolKind(action.value.tool))
             :title="action.text"
           >
             <span v-if="waiting" class="font-semibold text-critical">Fragt nach: </span>
-            <span v-else-if="action.said" class="font-medium" :class="SAID_KIND.text">Claude: </span>
-            <span v-if="action.tool" class="mr-1.5 font-mono text-[12px]" :class="tool.text">{{ action.tool }}</span>{{ action.detail }}
+            <span v-else-if="action.said" class="font-medium text-ink-2">Claude: </span>
+            <span v-if="action.tool" class="mr-1.5 font-mono text-[12px] text-ink-2">{{ action.tool }}</span>{{ action.detail }}
           </p>
         </template>
         <SessionStop v-if="working && s.live && s.herdr" :pane-id="s.herdr.paneId" class="ml-auto" />
@@ -180,7 +180,7 @@ const tool = computed(() => toolKind(action.value.tool))
 
     <div v-if="s.agentsTotal" class="mt-4 border-t border-line pt-4">
       <p class="flex items-center gap-2 text-[13px] font-semibold text-ink-2">
-        <Bot :size="15" :stroke-width="2" class="text-series-7" />
+        <Bot :size="15" :stroke-width="2" class="text-ink-3" />
         {{ s.agentsTotal }} {{ s.agentsTotal === 1 ? 'Subagent' : 'Subagents' }}
         <span v-if="s.agentsRunning" class="font-medium text-warning">· {{ s.agentsRunning }} {{ s.agentsRunning === 1 ? 'läuft' : 'laufen' }}</span>
       </p>
@@ -195,8 +195,8 @@ const tool = computed(() => toolKind(action.value.tool))
             class="shrink-0"
             :class="{ 'pop-in': a.status !== 'running', 'text-warning': a.status === 'running', 'text-good': a.status === 'done', 'text-critical': a.status === 'failed', 'text-ink-3': a.status === 'stopped' }"
           />
-          <span class="flex shrink-0 items-center gap-1 rounded px-1.5 text-[12px] font-medium" :class="agentKind(a.agentType).chip">
-            <component :is="agentKind(a.agentType).icon" :size="12" :stroke-width="2.25" />{{ a.agentType }}
+          <span class="flex shrink-0 items-center gap-1 rounded px-1.5 text-[12px] font-medium" :class="KIND_CHIP">
+            <component :is="agentKind(a.agentType).icon" :size="12" :stroke-width="2.25" :class="agentKind(a.agentType).text" />{{ a.agentType }}
           </span>
           <span class="min-w-0 flex-1 truncate" :class="a.status === 'running' ? 'shimmer text-ink' : 'text-ink-3'">{{ a.description }}</span>
           <span class="num shrink-0 text-[12px] text-ink-3">{{ duration((a.finished ?? now) - a.started) }}</span>

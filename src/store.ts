@@ -4,7 +4,7 @@ import type { Profile } from './api'
 /** Claude-Profile aus der letzten Übersicht; für E-Mail und Farbe eines Accounts. */
 export const profiles = ref<Profile[]>([])
 
-const ACCOUNT_COLORS = ['var(--color-series-1)', 'var(--color-series-3)', 'var(--color-series-7)', 'var(--color-series-4)']
+const ACCOUNT_COLORS = ['var(--color-series-1)', 'var(--color-series-7)', 'var(--color-ink-2)', 'var(--color-series-3)']
 
 export function accountInfo(label: string) {
   const i = profiles.value.findIndex((p) => p.label === label)

@@ -55,7 +55,7 @@ const groups = computed(() => {
     <section class="pb-6">
       <div class="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2">
         <h2 class="flex items-center gap-2.5 text-[20px] font-semibold tracking-tight">
-          <Radio :size="20" :stroke-width="2" class="radio-pulse text-brand" /> Laufende Sessions
+          <Radio :size="20" :stroke-width="2" class="radio-pulse text-ink-3" /> Laufende Sessions
           <span class="num rounded-full bg-surface-2 px-2.5 text-[14px] font-medium text-ink-2">{{ live.length }}</span>
         </h2>
         <span v-if="live.length" class="ml-auto flex items-center gap-1.5 text-[12px] font-semibold tracking-wide text-ink-3 uppercase">

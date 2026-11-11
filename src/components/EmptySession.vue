@@ -119,7 +119,7 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="flex w-full max-w-[220px] items-center gap-2 rounded-md border border-line-strong bg-app px-2.5 py-1 font-mono text-[12px] text-ink-3">
-          <span class="w-[1ch] shrink-0" :class="shell ? 'text-series-7' : 'text-brand'">{{ shell ? '!' : '>' }}</span>
+          <span class="w-[1ch] shrink-0" :class="shell ? 'text-act-change' : 'text-brand'">{{ shell ? '!' : '>' }}</span>
           <span class="-mr-1 truncate whitespace-pre text-ink-2" aria-hidden="true">{{ typed }}</span>
           <span class="h-3.5 w-[6px] shrink-0 rounded-[1px] bg-ink-2" :class="{ 'caret-blink': !typed }" aria-hidden="true" />
         </div>

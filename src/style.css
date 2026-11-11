@@ -2,7 +2,21 @@
 /* Ein-/Ausblenden der shadcn-Tooltips (animate-in, fade-in-0, zoom-in-95 …) */
 @import 'tw-animate-css';
 
-/* Dunkle Oberfläche und Datenfarben aus der validierten Dataviz-Palette (Dark-Stufen). */
+/*
+ * Farbe trägt Bedeutung, sie ist keine Deko. Geordnet nach Wichtigkeit: je höher die Ebene,
+ * desto lauter die Farbe, und keine Ebene leiht sich den Farbton einer anderen.
+ *
+ *   1 Alarm      critical  Freigabe nötig, Fehler, Stopp. Das einzige Rot im System.
+ *   2 Status     warning   arbeitet          good  fertig
+ *   3 Aktivität  act-*     was Claude gerade tut, nur auf Icons, Text bleibt neutral
+ *                          read: liest, sucht · change: schreibt, führt aus · outside: Web, MCP
+ *   – Inhalt     ink-*     alles andere, auch Claudes eigener Text, Todos, Skills
+ *   – Marke      brand     nur Logo und Clawd
+ *   – Daten      series-*  nur in Diagrammen und für Konto-Punkte; series-1 auch für Fokus
+ *
+ * Kühle Töne für Aktivität, damit sie nie wie Status oder Alarm aussehen. Alle Töne halten auf
+ * surface mindestens 4,5:1 Kontrast.
+ */
 @theme {
   --color-app: #0e0e0f;
   --color-surface: #19191a;
@@ -15,17 +29,20 @@
   --color-ink-3: #8e8d84;
   --color-brand: #d97757;
 
+  --color-critical: #e05252;
+  --color-warning: #fab219;
+  --color-good: #0ca30c;
+
+  --color-act-read: #3987e5;
+  --color-act-change: #9085e9;
+  --color-act-outside: #1fa9bd;
+
+  /* Validierte Dataviz-Palette (Dark-Stufen) */
   --color-series-1: #3987e5;
   --color-series-2: #d95926;
   --color-series-3: #199e70;
   --color-series-4: #c98500;
-  --color-series-5: #8fb339;
-  --color-series-6: #1fa9bd;
   --color-series-7: #9085e9;
-
-  --color-good: #0ca30c;
-  --color-warning: #fab219;
-  --color-critical: #e05252;
 
   --font-sans: 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
   --font-display: 'Segoe UI Variable Display', 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;

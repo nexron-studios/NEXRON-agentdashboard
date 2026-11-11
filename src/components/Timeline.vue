@@ -91,10 +91,10 @@ const ticks = computed(() => {
       </div>
       <span class="flex items-center gap-1.5 text-ink-2"><span class="h-2.5 w-2.5 rounded-full bg-ink" /> Anfrage</span>
       <span class="flex items-center gap-1.5 text-ink-2">
-        <span class="flex -space-x-1"><span class="h-2.5 w-2.5 rounded-full bg-series-1" /><span class="h-2.5 w-2.5 rounded-full bg-series-2" /><span class="h-2.5 w-2.5 rounded-full bg-series-4" /></span>
-        Tool-Aufruf, Farbe je Art
+        <span class="flex -space-x-1"><span class="h-2.5 w-2.5 rounded-full bg-act-read" /><span class="h-2.5 w-2.5 rounded-full bg-act-change" /><span class="h-2.5 w-2.5 rounded-full bg-act-outside" /></span>
+        Tool-Aufruf: liest, ändert, geht nach außen
       </span>
-      <span class="flex items-center gap-1.5 text-ink-2"><span class="h-2.5 w-4 rounded-sm bg-series-7" /> Subagent</span>
+      <span class="flex items-center gap-1.5 text-ink-2"><span class="h-2.5 w-4 rounded-sm bg-ink-3" /> Subagent, Farbe wie seine Arbeit</span>
       <span class="flex items-center gap-1.5 text-ink-2"><span class="font-bold text-critical">✕</span> Fehler</span>
       <span class="num ml-auto min-h-[1.2em] truncate text-ink">{{ hover }}</span>
     </div>

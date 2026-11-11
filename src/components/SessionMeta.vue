@@ -14,10 +14,10 @@ const lg = computed(() => props.size === 'lg')
   <div class="flex flex-wrap items-center gap-2" :class="lg ? 'text-[14px]' : 'text-[13px]'">
     <span
       v-if="herdr"
-      class="flex items-center gap-1.5 rounded-md border border-brand/35 bg-brand/12 px-2 py-0.5 font-semibold text-ink"
+      class="flex items-center gap-1.5 rounded-md border border-line-strong bg-surface-2 px-2 py-0.5 font-semibold text-ink"
       :title="`herdr: Workspace „${herdr.workspace}“, Tab „${herdr.tab}“`"
     >
-      <LayoutPanelTop :size="lg ? 16 : 14" :stroke-width="2" class="text-brand" />
+      <LayoutPanelTop :size="lg ? 16 : 14" :stroke-width="2" class="text-ink-3" />
       <span v-if="herdr.workspace" class="font-medium text-ink-2">{{ herdr.workspace }} ›</span>
       {{ herdr.tab }}
     </span>

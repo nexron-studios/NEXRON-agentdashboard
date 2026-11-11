@@ -31,7 +31,8 @@ const state = computed(() => {
     class="inline-flex shrink-0 items-center gap-1.5 rounded-full border font-semibold whitespace-nowrap"
     :class="[state.bg, state.text, size === 'sm' ? 'px-2 py-0.5 text-[12px]' : 'px-2.5 py-1 text-[13px]']"
   >
-    <span class="relative inline-flex" :class="{ attention: state === STATES.blocked }">
+    <!-- Neuer Status: Icon ploppt einmal auf, damit der Wechsel auffällt -->
+    <span :key="state.label" class="pop-in relative inline-flex" :class="{ attention: state === STATES.blocked }">
       <component :is="state.icon" :size="size === 'sm' ? 13 : 15" :stroke-width="2.25" />
     </span>
     {{ size === 'sm' && state === STATES.waiting ? 'Fertig' : state.label }}

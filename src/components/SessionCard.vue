@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Bot, CircleCheck, CircleX, Code, LayoutPanelTop, MessageSquareText, SquareTerminal, UserRound, Wrench } from 'lucide-vue-next'
 import type { SessionRow } from '../api'
 import { ago, awaitsYou, clock, date, duration, headline, modelName, needsApproval, PENDING_TITLE, plainPrompt, tokens } from '../format'
@@ -19,6 +19,18 @@ const s = computed(() => props.session)
 const waiting = computed(() => needsApproval(s.value.status))
 const fresh = computed(() => !s.value.title && !s.value.lastPrompt)
 const yourTurn = computed(() => awaitsYou(s.value.status) && !fresh.value)
+// Einmaliger Lichtring, wenn die Session fertig wird oder eine Freigabe braucht
+const FLASH_MS = 1400
+const flash = ref<'' | 'flash-good' | 'flash-critical'>('')
+let flashTimer: ReturnType<typeof setTimeout> | undefined
+const playFlash = (kind: 'flash-good' | 'flash-critical') => {
+  clearTimeout(flashTimer)
+  flash.value = kind
+  flashTimer = setTimeout(() => (flash.value = ''), FLASH_MS)
+}
+watch(yourTurn, (is, was) => is && !was && playFlash('flash-good'))
+watch(waiting, (is, was) => is && !was && playFlash('flash-critical'))
+onBeforeUnmount(() => clearTimeout(flashTimer))
 const working = computed(() => s.value.status === 'busy' || s.value.status === 'shell')
 const AGENT_ICON = { running: WaveLoader, done: CircleCheck, failed: CircleX } as const
 const agentIcon = (st: string) => AGENT_ICON[st as keyof typeof AGENT_ICON] ?? CircleCheck
@@ -52,7 +64,7 @@ const action = computed(() => {
        Infozeile, Inhalt, und unten immer an derselben Stelle die beiden Buttons (Ordner, Zum Chat). -->
   <article
     class="card press group relative flex flex-col p-5 hover:border-line-strong hover:bg-surface-2/60"
-    :class="{ 'border-critical/50!': waiting, 'border-good/35!': yourTurn }"
+    :class="[flash, { 'border-critical/50!': waiting, 'border-good/35!': yourTurn }]"
   >
     <div class="flex items-center gap-3">
       <div class="flex min-w-0 flex-1 items-center gap-2.5 text-[14px]">
@@ -133,7 +145,7 @@ const action = computed(() => {
       <div class="flex h-[1lh] gap-2.5 text-[13px]" :class="waiting ? 'text-ink' : 'text-ink-3'">
         <template v-if="s.lastAction">
           <component :is="action.said ? Bot : Wrench" :size="16" :stroke-width="1.75" class="mt-px shrink-0" :class="{ 'text-critical': waiting }" />
-          <p class="min-w-0 flex-1 truncate" :class="{ shimmer: working && !action.said }" :title="action.text">
+          <p :key="action.text" class="rise-in min-w-0 flex-1 truncate" :class="{ shimmer: working && !action.said }" :title="action.text">
             <span v-if="waiting" class="font-semibold text-critical">Fragt nach: </span>
             <span v-else-if="action.said" class="font-medium text-ink-2">Claude: </span>{{ action.text }}
           </p>
@@ -153,10 +165,11 @@ const action = computed(() => {
         <li v-for="a in s.agents" :key="a.id" class="flex items-center gap-2 text-[13px]">
           <component
             :is="agentIcon(a.status)"
+            :key="a.status"
             :size="14"
             :stroke-width="2.25"
             class="shrink-0"
-            :class="{ 'text-warning': a.status === 'running', 'text-good': a.status === 'done', 'text-critical': a.status === 'failed', 'text-ink-3': a.status === 'stopped' }"
+            :class="{ 'pop-in': a.status !== 'running', 'text-warning': a.status === 'running', 'text-good': a.status === 'done', 'text-critical': a.status === 'failed', 'text-ink-3': a.status === 'stopped' }"
           />
           <span class="shrink-0 rounded bg-series-7/20 px-1.5 text-[12px] font-medium">{{ a.agentType }}</span>
           <span class="min-w-0 flex-1 truncate" :class="a.status === 'running' ? 'shimmer text-ink' : 'text-ink-3'">{{ a.description }}</span>

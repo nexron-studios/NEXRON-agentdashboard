@@ -92,6 +92,15 @@ export interface TimelineEvent {
   sidechain: boolean
 }
 
+export interface Step {
+  t: number
+  kind: 'prompt' | 'tool'
+  label: string
+  detail: string
+  sidechain: boolean
+  failed: boolean
+}
+
 export interface Cost {
   totalUsd: number
   byModel: Record<string, number>
@@ -129,6 +138,7 @@ export interface Stats {
   errors: ErrorItem[]
   errorCount: number
   events: TimelineEvent[]
+  steps: Step[]
   promptLog: Prompt[]
   cost: Cost | null
   fileBytes: number
@@ -161,6 +171,7 @@ export const fetchOverview = (recentLimit: number) => invoke<Overview>('overview
 export const fetchDetail = (sessionId: string) => invoke<Detail>('session_detail', { sessionId })
 export const focusHerdr = (tabId: string) => invoke<void>('focus_herdr', { tabId })
 export const clearHerdr = (paneId: string) => invoke<void>('clear_herdr', { paneId })
+export const stopHerdr = (paneId: string) => invoke<void>('stop_herdr', { paneId })
 export const openFolder = (path: string) => invoke<void>('open_folder', { path })
 export const openSession = (pid: number | null, cwd: string, entrypoint: string) =>
   invoke<void>('open_session', { pid, cwd, entrypoint })

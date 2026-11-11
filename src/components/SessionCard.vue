@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Bot, CircleCheck, CircleX, Code, LayoutPanelTop, LoaderCircle, MessageSquareText, SquareTerminal, UserRound, Wrench } from 'lucide-vue-next'
+import { Bot, CircleCheck, CircleX, Code, LayoutPanelTop, MessageSquareText, SquareTerminal, UserRound, Wrench } from 'lucide-vue-next'
 import type { SessionRow } from '../api'
 import { ago, awaitsYou, clock, date, duration, headline, modelName, needsApproval, PENDING_TITLE, plainPrompt, tokens } from '../format'
 import EmptySession from './EmptySession.vue'
 import FolderLink from './FolderLink.vue'
 import SessionClear from './SessionClear.vue'
 import SessionOpen from './SessionOpen.vue'
+import SessionStop from './SessionStop.vue'
 import StatusBadge from './StatusBadge.vue'
+import WaveLoader from './WaveLoader.vue'
 import { accountInfo } from '../store'
 
 // `rank`: Platz in der Fertig-Reihenfolge (1 = zuletzt fertig geworden), wie die Chips über den Karten
@@ -18,7 +20,7 @@ const waiting = computed(() => needsApproval(s.value.status))
 const fresh = computed(() => !s.value.title && !s.value.lastPrompt)
 const yourTurn = computed(() => awaitsYou(s.value.status) && !fresh.value)
 const working = computed(() => s.value.status === 'busy' || s.value.status === 'shell')
-const AGENT_ICON = { running: LoaderCircle, done: CircleCheck, failed: CircleX } as const
+const AGENT_ICON = { running: WaveLoader, done: CircleCheck, failed: CircleX } as const
 const agentIcon = (st: string) => AGENT_ICON[st as keyof typeof AGENT_ICON] ?? CircleCheck
 const ctxPct = computed(() => (s.value.context ? Math.min(100, (s.value.context.tokens / s.value.context.window) * 100) : 0))
 const head = computed(() => headline(s.value))
@@ -131,11 +133,12 @@ const action = computed(() => {
       <div class="flex h-[1lh] gap-2.5 text-[13px]" :class="waiting ? 'text-ink' : 'text-ink-3'">
         <template v-if="s.lastAction">
           <component :is="action.said ? Bot : Wrench" :size="16" :stroke-width="1.75" class="mt-px shrink-0" :class="{ 'text-critical': waiting }" />
-          <p class="min-w-0 truncate" :class="{ shimmer: working && !action.said }" :title="action.text">
+          <p class="min-w-0 flex-1 truncate" :class="{ shimmer: working && !action.said }" :title="action.text">
             <span v-if="waiting" class="font-semibold text-critical">Fragt nach: </span>
             <span v-else-if="action.said" class="font-medium text-ink-2">Claude: </span>{{ action.text }}
           </p>
         </template>
+        <SessionStop v-if="working && s.live && s.herdr" :pane-id="s.herdr.paneId" class="ml-auto" />
       </div>
     </div>
 
@@ -153,7 +156,7 @@ const action = computed(() => {
             :size="14"
             :stroke-width="2.25"
             class="shrink-0"
-            :class="{ 'spin text-warning': a.status === 'running', 'text-good': a.status === 'done', 'text-critical': a.status === 'failed', 'text-ink-3': a.status === 'stopped' }"
+            :class="{ 'text-warning': a.status === 'running', 'text-good': a.status === 'done', 'text-critical': a.status === 'failed', 'text-ink-3': a.status === 'stopped' }"
           />
           <span class="shrink-0 rounded bg-series-7/20 px-1.5 text-[12px] font-medium">{{ a.agentType }}</span>
           <span class="min-w-0 flex-1 truncate" :class="a.status === 'running' ? 'shimmer text-ink' : 'text-ink-3'">{{ a.description }}</span>

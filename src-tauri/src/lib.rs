@@ -297,6 +297,11 @@ async fn clear_herdr(pane_id: String) -> Result<(), String> {
     herdr::clear_chat(&pane_id)
 }
 
+#[tauri::command]
+async fn stop_herdr(pane_id: String) -> Result<(), String> {
+    herdr::stop_agent(&pane_id)
+}
+
 /// Öffnet den Arbeitsordner einer Session im Datei-Explorer. Nur bestehende Ordner, damit aus
 /// dem Pfad nie eine Datei oder ein Programm gestartet wird.
 #[tauri::command]
@@ -421,7 +426,7 @@ pub fn run() {
             Ok(())
         })
         .manage(AppState::default())
-        .invoke_handler(tauri::generate_handler![overview, session_detail, focus_herdr, clear_herdr, open_folder, open_session])
+        .invoke_handler(tauri::generate_handler![overview, session_detail, focus_herdr, clear_herdr, stop_herdr, open_folder, open_session])
         .run(tauri::generate_context!())
         .expect("Agent Dashboard konnte nicht starten");
 }

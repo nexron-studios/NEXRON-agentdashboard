@@ -129,3 +129,19 @@ pub fn clear_chat(pane_id: &str) -> Result<(), String> {
         .map(|_| ())
         .ok_or_else(|| "herdr hat /clear nicht gesendet.".into())
 }
+
+/// Bricht die laufende Antwort ab wie Esc im Terminal. Nur während Claude arbeitet: Bei einer offenen
+/// Freigabe-Frage würde Esc die Freigabe ablehnen, und im Leerlauf gibt es nichts zu stoppen.
+pub fn stop_agent(pane_id: &str) -> Result<(), String> {
+    let info = call(&["agent", "get", pane_id]).ok_or("herdr findet diesen Chat nicht mehr. Läuft herdr?")?;
+    let agent = &info["agent"];
+    if agent["agent"] != "claude" {
+        return Err("In diesem herdr-Tab läuft kein Claude mehr.".into());
+    }
+    if agent["agent_status"] != "working" {
+        return Err("Claude arbeitet gerade nicht, es gibt nichts zu stoppen.".into());
+    }
+    call(&["agent", "send-keys", pane_id, "esc"])
+        .map(|_| ())
+        .ok_or_else(|| "herdr hat Esc nicht gesendet.".into())
+}

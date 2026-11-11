@@ -23,6 +23,7 @@ import SessionOpen from './SessionOpen.vue'
 import SessionMeta from './SessionMeta.vue'
 import StatusBadge from './StatusBadge.vue'
 import Timeline from './Timeline.vue'
+import ToolSteps from './ToolSteps.vue'
 
 const props = defineProps<{ sessionId: string }>()
 // Nach /clear läuft im selben Terminal eine neue Session; diese hier ist dann beendet, also zurück zur Übersicht
@@ -225,6 +226,8 @@ const errors = computed(() => [...(s.value?.errors ?? [])].reverse().slice(0, 40
           <ChevronDown :size="16" class="transition-transform duration-200" :class="{ 'rotate-180': showAllPrompts }" />
         </button>
       </section>
+
+      <ToolSteps v-if="s.steps.length" class="enter mt-4" style="--i: 4" :steps="s.steps" :working="status === 'busy' || status === 'shell'" />
 
       <section class="card enter mt-4 p-6" style="--i: 4">
         <div class="flex items-center justify-between">

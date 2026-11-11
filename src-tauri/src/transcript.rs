@@ -12,6 +12,9 @@ use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 const MAX_EVENTS: usize = 6000;
+/// So viele Schritte (Anfragen und Tool-Aufrufe mit Detail) behält der Ablauf in der Detailansicht.
+const MAX_STEPS: usize = 120;
+const STEP_CHARS: usize = 240;
 const MAX_ERRORS: usize = 200;
 const MAX_PROMPTS: usize = 300;
 const PROMPT_CHARS: usize = 4000;
@@ -74,6 +77,21 @@ pub struct Event {
     pub sidechain: bool,
 }
 
+/// Ein Schritt im Ablauf: eine eigene Anfrage oder ein Tool-Aufruf samt dem, worauf er zielt.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct Step {
+    pub t: i64,
+    /// prompt | tool
+    pub kind: &'static str,
+    /// Tool-Name oder Anfragetext
+    pub label: String,
+    pub detail: String,
+    pub sidechain: bool,
+    pub failed: bool,
+    #[serde(skip)]
+    tool_use_id: String,
+}
+
 #[derive(Serialize, Clone, Debug, PartialEq)]
 pub struct Prompt {
     pub t: i64,
@@ -120,6 +138,8 @@ pub struct Stats {
     pub errors: Vec<ErrorItem>,
     pub error_count: u32,
     pub events: Vec<Event>,
+    /// Die letzten Anfragen und Tool-Aufrufe, älteste zuerst.
+    pub steps: Vec<Step>,
     /// Eigene Anfragen in voller Länge (bis 4000 Zeichen), älteste zuerst.
     pub prompt_log: Vec<Prompt>,
     /// Stand der letzten `cost-state`-Zeile, die Claude Code selbst berechnet hat.
@@ -204,6 +224,10 @@ impl Transcript {
         let errors = &mut self.stats.errors;
         if errors.len() > MAX_ERRORS {
             errors.drain(..errors.len() - MAX_ERRORS);
+        }
+        let steps = &mut self.stats.steps;
+        if steps.len() > MAX_STEPS {
+            steps.drain(..steps.len() - MAX_STEPS);
         }
         let prompts = &mut self.stats.prompt_log;
         if prompts.len() > MAX_PROMPTS {
@@ -319,10 +343,20 @@ impl Transcript {
                 status: "running".into(),
             });
         }
-        self.tool_names.insert(id, name.clone());
+        self.tool_names.insert(id.clone(), name.clone());
 
-        match INPUT_KEYS.iter().find_map(|k| input[*k].as_str().filter(|s| !s.is_empty())) {
-            Some(detail) => format!("{name}: {}", one_line(detail)),
+        let detail = INPUT_KEYS.iter().find_map(|k| input[*k].as_str().filter(|s| !s.is_empty())).map(one_line);
+        s.steps.push(Step {
+            t,
+            kind: "tool",
+            label: name.clone(),
+            detail: cut(detail.as_deref().unwrap_or(""), STEP_CHARS),
+            sidechain,
+            failed: false,
+            tool_use_id: id,
+        });
+        match detail {
+            Some(detail) => format!("{name}: {detail}"),
             None => name,
         }
     }
@@ -352,6 +386,9 @@ impl Transcript {
         let id = b["tool_use_id"].as_str().unwrap_or("");
         let failed = b["is_error"].as_bool().unwrap_or(false);
         if failed {
+            if let Some(step) = self.stats.steps.iter_mut().rev().find(|st| st.tool_use_id == id) {
+                step.failed = true;
+            }
             let source = self.tool_names.get(id).cloned().unwrap_or_else(|| "Tool".into());
             self.error(t, source, text_of(&b["content"]), sidechain);
         }
@@ -416,6 +453,7 @@ impl Transcript {
             s.current_task_is_first = s.prompts == 1;
         }
         s.events.push(Event { t, kind: "prompt", label: cut(&one_line(text), 160), sidechain: false });
+        s.steps.push(Step { t, kind: "prompt", label: cut(&one_line(text), STEP_CHARS), detail: String::new(), sidechain: false, failed: false, tool_use_id: String::new() });
         s.prompt_log.push(Prompt { t, text: full });
     }
 
@@ -583,6 +621,8 @@ mod tests {
         assert_eq!((a.status.as_str(), a.model.as_str(), a.background), ("done", "claude-sonnet-5-5", true));
         assert_eq!(a.finished, parse_time("2026-11-02T10:05:00Z"));
         assert_eq!(s.last_t - s.first_t, 5 * 60 * 1000);
+        let steps: Vec<_> = s.steps.iter().map(|st| (st.kind, st.label.as_str(), st.detail.as_str(), st.failed)).collect();
+        assert_eq!(steps, [("prompt", "fix den Login", "", false), ("tool", "Bash", "Run tests", true), ("tool", "Agent", "Tests reparieren", false)]);
     }
 
     #[test]
@@ -614,6 +654,7 @@ mod tests {
         println!("{} MB in {:?}", s.file_bytes / 1_000_000, started.elapsed());
         println!("{:?} | prompts {} turns {} tools {} errors {} agents {} events {}", s.title, s.prompts, s.turns, s.tool_calls, s.error_count, s.agents.len(), s.events.len());
         println!("models {:?}\ncontext {:?}\ncost {:?}", s.models, s.context, s.cost.as_ref().map(|c| c.total_usd));
+        println!("steps {} last {:?}", s.steps.len(), s.steps.iter().rev().take(3).map(|st| (st.kind, &st.label, &st.detail, st.failed)).collect::<Vec<_>>());
         println!("agents {:?}", s.agents.iter().map(|a| (&a.description, &a.status, &a.model)).collect::<Vec<_>>());
     }
 

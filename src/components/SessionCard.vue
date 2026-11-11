@@ -10,7 +10,7 @@ import SessionOpen from './SessionOpen.vue'
 import SessionStop from './SessionStop.vue'
 import StatusBadge from './StatusBadge.vue'
 import TerminalLoader from './TerminalLoader.vue'
-import { toolIcon } from '../toolIcons'
+import { agentKind, toolKind } from '../kinds'
 import WaveLoader from './WaveLoader.vue'
 import { accountInfo } from '../store'
 
@@ -64,6 +64,7 @@ const action = computed(() => {
   return { said, text, tool: match?.[1] ?? '', detail: match ? (match[2] ?? '') : text }
 })
 const isBash = computed(() => action.value.tool === 'Bash')
+const tool = computed(() => toolKind(action.value.tool))
 </script>
 
 <template>
@@ -152,7 +153,15 @@ const isBash = computed(() => action.value.tool === 'Bash')
       <div class="flex h-[1lh] gap-2.5 text-[13px]" :class="waiting ? 'text-ink' : 'text-ink-3'">
         <template v-if="s.lastAction">
           <TerminalLoader v-if="isBash" :size="16" :running="working" class="mt-px" :class="working ? 'text-warning' : waiting ? 'text-critical' : ''" />
-          <component :is="action.said ? Bot : toolIcon(action.tool)" v-else :size="16" :stroke-width="1.75" class="mt-px shrink-0" :class="{ 'text-critical': waiting }" />
+          <component
+            :is="action.said ? Bot : tool.icon"
+            v-else
+            :key="action.tool"
+            :size="16"
+            :stroke-width="1.75"
+            class="pop-in mt-px shrink-0"
+            :class="waiting ? 'text-critical' : action.said ? '' : tool.text"
+          />
           <!-- Neuer Befehl tippt sich ein wie im Terminal, alle anderen Schritte gleiten herein -->
           <p
             :key="action.text"
@@ -162,7 +171,7 @@ const isBash = computed(() => action.value.tool === 'Bash')
           >
             <span v-if="waiting" class="font-semibold text-critical">Fragt nach: </span>
             <span v-else-if="action.said" class="font-medium text-ink-2">Claude: </span>
-            <span v-if="action.tool" class="mr-1.5 font-mono text-[12px] text-ink-2">{{ action.tool }}</span>{{ action.detail }}
+            <span v-if="action.tool" class="mr-1.5 font-mono text-[12px]" :class="isBash ? 'text-ink-2' : tool.text">{{ action.tool }}</span>{{ action.detail }}
           </p>
         </template>
         <SessionStop v-if="working && s.live && s.herdr" :pane-id="s.herdr.paneId" class="ml-auto" />
@@ -186,7 +195,9 @@ const isBash = computed(() => action.value.tool === 'Bash')
             class="shrink-0"
             :class="{ 'pop-in': a.status !== 'running', 'text-warning': a.status === 'running', 'text-good': a.status === 'done', 'text-critical': a.status === 'failed', 'text-ink-3': a.status === 'stopped' }"
           />
-          <span class="shrink-0 rounded bg-series-7/20 px-1.5 text-[12px] font-medium">{{ a.agentType }}</span>
+          <span class="flex shrink-0 items-center gap-1 rounded px-1.5 text-[12px] font-medium" :class="agentKind(a.agentType).chip">
+            <component :is="agentKind(a.agentType).icon" :size="12" :stroke-width="2.25" />{{ a.agentType }}
+          </span>
           <span class="min-w-0 flex-1 truncate" :class="a.status === 'running' ? 'shimmer text-ink' : 'text-ink-3'">{{ a.description }}</span>
           <span class="num shrink-0 text-[12px] text-ink-3">{{ duration((a.finished ?? now) - a.started) }}</span>
         </li>

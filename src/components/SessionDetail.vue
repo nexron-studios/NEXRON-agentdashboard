@@ -16,6 +16,7 @@ import {
   Wrench,
 } from 'lucide-vue-next'
 import { fetchDetail, type Detail } from '../api'
+import { agentKind, toolKind } from '../kinds'
 import { date, duration, headline, modelName, PENDING_TITLE, time, tokens, usd, usePolling } from '../format'
 import FolderLink from './FolderLink.vue'
 import SessionClear from './SessionClear.vue'
@@ -184,9 +185,12 @@ const errors = computed(() => [...(s.value?.errors ?? [])].reverse().slice(0, 40
               class="grid grid-cols-[160px_1fr] items-center gap-3 rounded-md px-1.5 py-0.5 transition-colors duration-150 hover:bg-surface-2"
               :title="`${name}: ${n} Aufrufe`"
             >
-              <span class="truncate font-mono text-[13px] text-ink-2">{{ name }}</span>
+              <span class="flex min-w-0 items-center gap-1.5 font-mono text-[13px] text-ink-2">
+                <component :is="toolKind(name).icon" :size="14" :stroke-width="2" class="shrink-0" :class="toolKind(name).text" />
+                <span class="truncate">{{ name }}</span>
+              </span>
               <div class="flex items-center gap-2.5">
-                <div class="bar-grow h-3 rounded-r-[4px] bg-series-1" :style="{ width: Math.max(1, (n / toolMax) * 82) + '%' }" />
+                <div class="bar-grow h-3 rounded-r-[4px]" :class="toolKind(name).bar" :style="{ width: Math.max(1, (n / toolMax) * 82) + '%' }" />
                 <span class="num text-[13px] text-ink-2">{{ n }}</span>
               </div>
             </div>
@@ -287,8 +291,8 @@ const errors = computed(() => [...(s.value?.errors ?? [])].reverse().slice(0, 40
           <span class="num rounded-full bg-surface-2 px-2 text-[13px] font-medium text-ink-2">{{ s.agents.length }}</span>
         </h2>
         <div class="mt-3 flex flex-wrap gap-1.5">
-          <span v-for="[type, n] in agentTypes" :key="type" class="rounded-md bg-series-7/20 px-2 py-0.5 text-[12px] font-medium">
-            {{ type }} <span class="text-ink-3">×{{ n }}</span>
+          <span v-for="[type, n] in agentTypes" :key="type" class="flex items-center gap-1 rounded-md px-2 py-0.5 text-[12px] font-medium" :class="agentKind(type).chip">
+            <component :is="agentKind(type).icon" :size="12" :stroke-width="2.25" />{{ type }} <span class="text-ink-3">×{{ n }}</span>
           </span>
         </div>
         <div class="mt-4 space-y-1">
@@ -297,7 +301,9 @@ const errors = computed(() => [...(s.value?.errors ?? [])].reverse().slice(0, 40
             :key="a.id"
             class="grid grid-cols-[auto_auto_1fr_auto_auto_auto] items-center gap-3 rounded-md px-1.5 py-1.5 text-[14px] transition-colors duration-150 hover:bg-surface-2"
           >
-            <span class="rounded-md bg-series-7/20 px-2 py-0.5 text-[12px] font-medium">{{ a.agentType }}</span>
+            <span class="flex items-center gap-1 rounded-md px-2 py-0.5 text-[12px] font-medium" :class="agentKind(a.agentType).chip">
+              <component :is="agentKind(a.agentType).icon" :size="12" :stroke-width="2.25" />{{ a.agentType }}
+            </span>
             <span class="rounded-md bg-surface-2 px-2 py-0.5 text-[12px] text-ink-3">{{ a.model ? modelName(a.model) : 'erbt Modell' }}</span>
             <span class="truncate" :title="a.description">{{ a.description }}</span>
             <span class="font-medium" :class="agentStatus(a.status).cls">{{ agentStatus(a.status).label }}</span>

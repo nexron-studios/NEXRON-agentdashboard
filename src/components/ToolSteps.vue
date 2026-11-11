@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { Bot, ChevronDown, ListTree, MessageSquareText } from 'lucide-vue-next'
 import type { Step } from '../api'
 import { time } from '../format'
+import { toolKind } from '../kinds'
 
 // Ablauf nach prompt-kit „Steps“: je Anfrage ein aufklappbarer Block, darunter die Tool-Aufrufe an
 // einer senkrechten Linie. Die neueste Anfrage ist offen, ältere klappen auf Klick auf.
@@ -66,10 +67,10 @@ const isCurrent = (gi: number, si: number, g: Group) => props.working && gi === 
               <Bot v-if="st.sidechain" :size="13" :stroke-width="2" class="shrink-0 text-series-3" aria-label="Subagent" />
               <span class="w-40 shrink-0">
                 <span
-                  class="inline-block max-w-full truncate rounded px-1.5 align-middle font-mono text-[12px]"
-                  :class="st.failed ? 'bg-critical/15 text-critical' : 'bg-surface-2 text-ink-2'"
-                  :title="st.failed ? `${st.label} ist fehlgeschlagen` : st.label"
-                >{{ st.label }}</span>
+                  class="inline-flex max-w-full items-center gap-1 rounded px-1.5 align-middle font-mono text-[12px]"
+                  :class="st.failed ? 'bg-critical/15 text-critical' : toolKind(st.label).chip"
+                  :aria-label="st.failed ? `${st.label} ist fehlgeschlagen` : undefined"
+                ><component :is="toolKind(st.label).icon" :size="12" :stroke-width="2.25" class="shrink-0" /><span class="truncate" :title="st.label">{{ st.label }}</span></span>
               </span>
               <span class="min-w-0 flex-1 truncate" :class="isCurrent(gi, si, g) ? 'shimmer' : 'text-ink-3'" :title="st.detail">{{ st.detail }}</span>
               <span class="num shrink-0 text-[12px] text-ink-3">{{ time(st.t) }}</span>

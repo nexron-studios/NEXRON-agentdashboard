@@ -53,8 +53,13 @@ const name = (s: SessionRow) => s.herdr?.tab || s.name || projectName(s.cwd)
 </template>
 
 <style scoped>
-/* Neu fertig: rutscht von links auf ① rein, die anderen rücken einen Platz weiter. Freie Plätze
-   verschwinden sofort (keine Leave-Animation), sonst stünde kurz ein Platz zu viel im Raster. */
+/* Neu fertig: rutscht von links auf ① rein, die anderen rücken einen Platz weiter. Was die Leiste
+   verlässt (neue Aufgabe, freier Platz), ist sofort aus dem Raster: Ohne `display: none` hält Vue es
+   für die Dauer von `transition-colors` (150 ms) fest, dann steht ein Platz zu viel im Raster, es
+   bricht in eine neue Zeile um und alles darunter springt runter und wieder hoch. */
+.slot-leave-active {
+  display: none;
+}
 .slot-move,
 .slot-enter-active {
   transition:

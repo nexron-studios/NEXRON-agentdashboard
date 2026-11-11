@@ -5,14 +5,14 @@ import {
 import type { Component } from 'vue'
 
 // Farbe und Icon je Tool und je Subagent-Typ, damit man ohne Lesen sieht, was gerade passiert.
-// Gleiche Farbe heißt gleiche Art Arbeit: blau liest, orange schreibt, cyan sucht, pink geht ins Web.
+// Gleiche Farbe heißt gleiche Art Arbeit: blau liest, orange schreibt, cyan sucht, limettengrün geht ins Web.
 // Klassen stehen ausgeschrieben, weil Tailwind nur vollständige Klassennamen im Quelltext findet.
 const TONES = {
   blue: { text: 'text-series-1', chip: 'bg-series-1/15 text-series-1', bar: 'bg-series-1' },
   orange: { text: 'text-series-2', chip: 'bg-series-2/15 text-series-2', bar: 'bg-series-2' },
   green: { text: 'text-series-3', chip: 'bg-series-3/15 text-series-3', bar: 'bg-series-3' },
   amber: { text: 'text-series-4', chip: 'bg-series-4/15 text-series-4', bar: 'bg-series-4' },
-  pink: { text: 'text-series-5', chip: 'bg-series-5/15 text-series-5', bar: 'bg-series-5' },
+  lime: { text: 'text-series-5', chip: 'bg-series-5/15 text-series-5', bar: 'bg-series-5' },
   cyan: { text: 'text-series-6', chip: 'bg-series-6/15 text-series-6', bar: 'bg-series-6' },
   purple: { text: 'text-series-7', chip: 'bg-series-7/15 text-series-7', bar: 'bg-series-7' },
   neutral: { text: 'text-ink-2', chip: 'bg-surface-2 text-ink-2', bar: 'bg-ink-3' },
@@ -37,8 +37,8 @@ const TOOL_KINDS: Record<string, Kind> = {
   Grep: kind(Search, 'cyan'),
   Glob: kind(Search, 'cyan'),
   ToolSearch: kind(Search, 'cyan'),
-  WebFetch: kind(Globe, 'pink'),
-  WebSearch: kind(Earth, 'pink'),
+  WebFetch: kind(Globe, 'lime'),
+  WebSearch: kind(Earth, 'lime'),
   Agent: kind(Bot, 'purple'),
   Task: kind(Bot, 'purple'),
   SendMessage: kind(Send, 'purple'),
@@ -58,7 +58,7 @@ const AGENT_KINDS: Record<string, Kind> = {
   'general-purpose': kind(Bot, 'purple'),
   Explore: kind(Telescope, 'cyan'),
   Plan: kind(Map, 'blue'),
-  'web-fetch': kind(Globe, 'pink'),
+  'web-fetch': kind(Globe, 'lime'),
   fork: kind(GitFork, 'orange'),
   'claude-code-guide': kind(BookOpen, 'amber'),
   'statusline-setup': kind(Settings2, 'neutral'),

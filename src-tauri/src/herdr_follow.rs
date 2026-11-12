@@ -12,8 +12,6 @@
 //! Suche. Die Suche taugt ohnehin nicht: Sie trifft auch Session-Titel wie „Bug auf EchoRidePC“.
 
 #[cfg(target_os = "macos")]
-use std::path::PathBuf;
-#[cfg(target_os = "macos")]
 use std::process::Command;
 
 /// herdrs Standardtasten; eigene Belegungen in `~/.config/herdr/config.toml` brechen das
@@ -28,10 +26,6 @@ const PAGE_ROWS: usize = 8;
 pub struct Target {
     pub row: usize,
     pub total_rows: usize,
-    /// herdr-Profil-ID der Ziel-Machine; `None` für Local
-    pub profile: Option<String>,
-    /// Nur die Machine wechseln: Steht herdr schon dort, wird nichts getippt
-    pub machine_only: bool,
 }
 
 /// Die Tasten, die von einer beliebigen Navigator-Zeile zur Ziel-Zeile führen
@@ -42,15 +36,6 @@ fn keys(target: &Target) -> Vec<&'static str> {
     keys.extend(std::iter::repeat_n(DOWN, target.row));
     keys.push(ENTER);
     keys
-}
-
-/// Welche Machine der herdr-Client zuletzt gewählt hat; herdr schreibt das bei jedem Wechsel
-#[cfg(target_os = "macos")]
-fn selected_profile() -> Option<Option<String>> {
-    let home = std::env::var_os("HOME")?;
-    let path = PathBuf::from(home).join(".local/state/herdr/client/endpoint-selection.json");
-    let v: serde_json::Value = serde_json::from_slice(&std::fs::read(path).ok()?).ok()?;
-    Some(v["selected_profile"].as_str().map(str::to_string))
 }
 
 #[cfg(target_os = "macos")]
@@ -126,23 +111,26 @@ const TYPE_KEYS: &str = r#"on run argv
   return "missing"
 end run"#;
 
-/// Tippt die Tasten in jeden herdr-Client in Ghostty. Läuft keiner, passiert nichts.
+/// Tippt die Tasten in jeden herdr-Client in Ghostty und gibt zurück, in wie viele. Steht herdr
+/// schon auf der Ziel-Machine, wählt Enter sie nur noch einmal, das ändert nichts. (herdrs eigene
+/// Auswahl-Datei taugt nicht zum Überspringen: Sie ist nicht immer aktuell.)
 #[cfg(target_os = "macos")]
-pub fn send(target: &Target) -> Result<(), String> {
-    if target.machine_only && selected_profile().as_ref() == Some(&target.profile) {
-        return Ok(());
-    }
+pub fn send(target: &Target) -> Result<usize, String> {
     let actions: Vec<String> = keys(target).iter().map(|k| format!("text:{k}")).collect();
-    for terminal in herdr_terminals()? {
-        let args: Vec<String> = std::iter::once(terminal).chain(actions.iter().cloned()).collect();
-        osascript(TYPE_KEYS, &args)?;
+    let terminals = herdr_terminals()?;
+    for terminal in &terminals {
+        let args: Vec<String> = std::iter::once(terminal.clone()).chain(actions.iter().cloned()).collect();
+        let answer = osascript(TYPE_KEYS, &args)?;
+        if answer.trim() != "sent" {
+            return Err(format!("Ghostty-Terminal {terminal} nicht gefunden"));
+        }
     }
-    Ok(())
+    Ok(terminals.len())
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn send(_target: &Target) -> Result<(), String> {
-    Ok(())
+pub fn send(_target: &Target) -> Result<usize, String> {
+    Ok(0)
 }
 
 #[cfg(test)]
@@ -161,7 +149,7 @@ mod tests {
 
     #[test]
     fn keys_reach_the_row_from_anywhere() {
-        let target = Target { row: 9, total_rows: 17, profile: None, machine_only: true };
+        let target = Target { row: 9, total_rows: 17 };
         let keys = keys(&target);
         assert_eq!(&keys[..2], &[PREFIX, OPEN_NAVIGATOR]);
         // 17 Zeilen: drei Seiten hoch reichen von ganz unten bis oben, eine mehr zur Sicherheit

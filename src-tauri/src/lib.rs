@@ -513,8 +513,7 @@ async fn focus_herdr(tab_id: String, pane_id: String, machine: Option<String>, s
     if remote.is_some() {
         // Auf einer anderen Machine holt nur herdrs eigene Tastatur den Client dorthin (herdr_follow.rs).
         // Ohne herdr in Ghostty fokussiert wenigstens der Server den Tab.
-        let target = navigator_target(&state, machine.as_deref(), Some(&pane_id))?;
-        tauri::async_runtime::spawn_blocking(move || herdr_follow::send(&target)).await.map_err(|e| e.to_string())??;
+        follow(&state, machine.as_deref(), Some(&pane_id)).await?;
     }
     herdr::focus_tab(remote.as_deref(), &tab_id)
 }
@@ -522,8 +521,32 @@ async fn focus_herdr(tab_id: String, pane_id: String, machine: Option<String>, s
 /// Der herdr-Client in Ghostty wechselt auf dieselbe Machine wie der Umschalter im Dashboard.
 #[tauri::command]
 async fn follow_in_herdr(machine: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
-    let target = navigator_target(&state, Some(&machine), None)?;
-    tauri::async_runtime::spawn_blocking(move || herdr_follow::send(&target)).await.map_err(|e| e.to_string())?
+    follow(&state, Some(&machine), None).await
+}
+
+/// Schickt herdr zur Machine bzw. zum Pane und hält jeden Versuch in `herdr-follow.log` im App-Cache
+/// fest: Ob die Tasten ankommen, sieht man sonst nur am herdr-Fenster.
+async fn follow(state: &AppState, machine: Option<&str>, pane_id: Option<&str>) -> Result<(), String> {
+    let target = navigator_target(state, machine, pane_id);
+    let what = format!("machine={} pane={}", machine.unwrap_or(LOCAL_MACHINE), pane_id.unwrap_or("-"));
+    let result = match target {
+        Ok(target) => {
+            let row = format!("row={}/{}", target.row, target.total_rows);
+            let sent = tauri::async_runtime::spawn_blocking(move || herdr_follow::send(&target)).await.map_err(|e| e.to_string())?;
+            sent.map(|n| format!("{row} terminals={n}")).map_err(|e| format!("{row} {e}"))
+        }
+        Err(e) => Err(e),
+    };
+    if let Some(dir) = state.cache_dir.get() {
+        let line = format!("{} {what} {}\n", chrono::Local::now().format("%F %T"), match &result {
+            Ok(ok) => format!("ok {ok}"),
+            Err(e) => format!("error {e}"),
+        });
+        let _ = std::fs::create_dir_all(dir);
+        let log = std::fs::OpenOptions::new().create(true).append(true).open(dir.join("herdr-follow.log"));
+        let _ = log.and_then(|mut f| std::io::Write::write_all(&mut f, line.as_bytes()));
+    }
+    result.map(|_| ())
 }
 
 /// Zeile im herdr-Navigator: die Machine selbst oder, mit `pane_id`, ein Pane darunter. Die Reihenfolge
@@ -546,7 +569,7 @@ fn navigator_target(state: &AppState, machine: Option<&str>, pane_id: Option<&st
         offset += 1 + rows.len();
     }
     let row = row.ok_or("herdr kennt diese Machine oder diesen Tab nicht")?;
-    Ok(herdr_follow::Target { row, total_rows: offset, profile, machine_only: pane_id.is_none() })
+    Ok(herdr_follow::Target { row, total_rows: offset })
 }
 
 #[tauri::command]

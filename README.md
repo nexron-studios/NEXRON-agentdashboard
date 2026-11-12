@@ -47,6 +47,7 @@ Run several Claude Code sessions at once and see at a glance which one is workin
   - subagents, errors and a timeline
 - **Recent sessions** (*Zuletzt*), grouped by day and searchable by title, folder or prompt.
 - **Multiple accounts.** Every Claude profile gets its own color, so you can tell work and personal sessions apart.
+- **Multiple machines.** Every SSH machine saved in herdr gets a tab next to *Laufende Sessions*. The tab of the machine you're not looking at shows whether something there needs your approval or is done.
 - **Read-only.** The app only reads Claude Code's files. It never writes to them.
 
 ![Session detail view](docs/screenshots/detail.png)
@@ -117,6 +118,14 @@ For example, `~/.claude-work` shows up as **work**.
 
 If [herdr](https://herdr.dev) is installed and its server is running, each card shows its workspace and tab (e.g. `dev › claude-2`), and running sessions are sorted in tab order. The dashboard matches sessions to tabs by process ID, using `herdr pane process-info` and Claude Code's `sessions/<pid>.json`. Without herdr, everything else works the same.
 
+### Other machines
+
+Every machine in `herdr machine list` shows up in a switcher next to *Laufende Sessions*, after this computer. Click a machine or press `⌘1`, `⌘2`, … (`Ctrl` on Windows) to switch. Cards, *Zuletzt* and the header counters then belong to that machine. The other machine's tab shows its most important state with the header's icon: approval, then done, then working.
+
+On another machine, *Zum Chat*, *Stopp* and *Chat löschen* go through herdr on that machine. Folders and windows there can't be opened from here, so the folder chip is plain text.
+
+How it works: the dashboard keeps one SSH connection per machine open (`ssh <target>` from herdr, with `BatchMode`, so a key must be set up). Over it, `src-tauri/src/remote_sync.ps1` runs as a single PowerShell process on the machine and pushes what changed every 2 seconds: running sessions, herdr's state, and new transcript lines. The dashboard mirrors the transcripts into its cache folder (`machines/<id>/`) and reads them with the same parser as local ones. Ended sessions are mirrored only at their start and end, until you open one. For now, only Windows machines are supported.
+
 ### Session titles
 
 Claude Code names a session once, at the start, and never renames it. When you keep working in the same chat on something else, the dashboard asks Haiku for a new short title through `claude -p --model haiku` (no tools, no MCP servers, no saved transcript). No API key is needed: the call runs on the subscription of the profile the session belongs to. It only runs for live sessions whose topic changed, at most once every 2 minutes per session. Titles are stored in `%APPDATA%\com.nexron.agentdashboard	opics.json`, and the original title stays visible as „Gestartet als …“.
@@ -141,6 +150,7 @@ cargo test --release --manifest-path src-tauri/Cargo.toml parses_real_transcript
 | --- | --- |
 | `src-tauri/src/sessions.rs` | Finds profiles, live sessions and transcripts |
 | `src-tauri/src/herdr.rs` | Maps sessions to herdr workspaces and tabs |
+| `src-tauri/src/remote.rs`, `remote_sync.ps1` | Sessions on other machines, mirrored over SSH |
 | `src-tauri/src/topics.rs` | Short titles for the current topic via `claude -p` |
 | `src-tauri/src/transcript.rs` | Incremental transcript parser |
 | `src-tauri/src/lib.rs` | Tauri commands: `overview`, `session_detail`, `focus_herdr`, `open_folder` |

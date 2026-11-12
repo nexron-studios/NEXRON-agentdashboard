@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Code, LayoutPanelTop, SquareTerminal, UserRound } from 'lucide-vue-next'
+import { Code, LayoutPanelTop, Monitor, SquareTerminal, UserRound } from 'lucide-vue-next'
 import type { HerdrPlace } from '../api'
-import { accountInfo } from '../store'
+import { accountInfo, isRemote, machine } from '../store'
 
 const props = defineProps<{ herdr: HerdrPlace | null; account: string; entrypoint?: string; name?: string; size?: 'md' | 'lg' }>()
 
@@ -28,6 +28,11 @@ const lg = computed(() => props.size === 'lg')
     <span v-if="account" class="flex items-center gap-1.5 rounded-md bg-surface-2 px-2 py-0.5 font-medium text-ink-2" :title="acc.email ? `Claude-Account: ${acc.email}` : 'Claude-Profil'">
       <UserRound :size="lg ? 16 : 14" :stroke-width="1.75" :style="{ color: acc.color }" />
       {{ account }}
+    </span>
+
+    <!-- Nur in der Detailansicht: Auf den Karten steht der Rechner schon im Umschalter darüber -->
+    <span v-if="lg && isRemote" class="flex items-center gap-1.5 rounded-md bg-surface-2 px-2 py-0.5 font-medium text-ink-2" :title="`Läuft auf ${machine?.host}`">
+      <Monitor :size="16" :stroke-width="1.75" class="text-ink-3" /> {{ machine?.label }}
     </span>
 
     <span v-if="entrypoint === 'claude-vscode'" class="flex items-center gap-1.5 rounded-md bg-surface-2 px-2 py-0.5 text-ink-2" title="Läuft in VS Code">

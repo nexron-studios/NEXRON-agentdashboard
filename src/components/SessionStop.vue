@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref } from 'vue'
 import { Square } from 'lucide-vue-next'
-import { stopHerdr } from '../api'
+import { stopHerdr, type HerdrPlace } from '../api'
 
 // Stoppen wie Esc im Terminal. Zwei Klicks statt Dialog: Die Karte ist überall klickbar, ein einzelner
 // Fehlklick soll keine laufende Aufgabe abbrechen, ein Dialog wäre für eine Sekunde Entscheidung zu schwer.
-const props = defineProps<{ paneId: string }>()
+const props = defineProps<{ herdr: HerdrPlace }>()
 const CONFIRM_MS = 3000
 const armed = ref(false)
 const failed = ref('')
@@ -25,7 +25,7 @@ const handleClick = async () => {
   }
   disarm()
   try {
-    await stopHerdr(props.paneId)
+    await stopHerdr(props.herdr)
   } catch (e) {
     failed.value = String(e)
   }

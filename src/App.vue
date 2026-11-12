@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ArrowLeft, CircleAlert, CircleCheck } from 'lucide-vue-next'
 import { fetchOverview, type Overview } from './api'
 import { awaitsYou, isBusy, needsApproval, usePolling } from './format'
-import { profiles } from './store'
+import { machineId, machines, profiles } from './store'
 import ClawdLogo from './components/ClawdLogo.vue'
 import NexronLogo from './components/NexronLogo.vue'
 import QuotaMeter from './components/QuotaMeter.vue'
@@ -18,15 +18,28 @@ const overview = ref<Overview | null>(null)
 const error = ref('')
 const selected = ref<string | null>(null)
 
-const { now } = usePolling(async () => {
+const { now, refresh } = usePolling(async () => {
   try {
-    overview.value = await fetchOverview(RECENT)
-    profiles.value = overview.value.profiles
+    const next = await fetchOverview(RECENT, machineId.value)
+    machines.value = next.machines
+    // Antwort zu einem Rechner, von dem inzwischen weggeschaltet wurde: verwerfen, der nächste Abruf läuft schon
+    if (next.machine !== machineId.value && next.machines.some((m) => m.id === machineId.value)) return
+    overview.value = next
+    profiles.value = next.profiles
     error.value = ''
   } catch (e) {
     error.value = String(e)
   }
 }, 2000)
+
+// Die Karten des vorigen Rechners verschwinden sofort; bis die neuen da sind, stehen Platzhalter
+const selectMachine = (id: string) => {
+  if (id === machineId.value) return
+  machineId.value = id
+  selected.value = null
+  overview.value = null
+  refresh()
+}
 
 const counts = computed(() => {
   const c = { approval: 0, busy: 0, waiting: 0 }
@@ -39,6 +52,13 @@ const counts = computed(() => {
 })
 
 const onKey = (e: KeyboardEvent) => {
+  // ⌘1, ⌘2 … (Windows: Strg) wählt den Rechner in der Reihenfolge des Umschalters
+  const index = Number(e.key) - 1
+  if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && machines.value.length > 1 && machines.value[index]) {
+    e.preventDefault()
+    selectMachine(machines.value[index].id)
+    return
+  }
   // Esc in einem offenen Dialog schließt nur den Dialog, nicht auch noch die Detailansicht
   if (e.key !== 'Escape' || document.querySelector('[role="alertdialog"]')) return
   selected.value = null
@@ -102,7 +122,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     <main class="min-h-0 flex-1 overflow-y-auto">
       <Transition name="view" mode="out-in">
         <SessionDetail v-if="selected" :key="selected" :session-id="selected" @back="selected = null" />
-        <SessionList v-else :overview="overview" :error="error" :now="now" @select="selected = $event" />
+        <SessionList
+          v-else
+          :overview="overview"
+          :error="error"
+          :now="now"
+          @select="selected = $event"
+          @machine="selectMachine"
+        />
       </Transition>
     </main>
     <TitleTooltips />

@@ -13,6 +13,8 @@ export interface HerdrPlace {
   paneId: string
   title: string
   status: string
+  /** herdr-Machine, auf der der Tab liegt; `null` auf diesem Rechner */
+  machine: string | null
 }
 
 export interface Profile {
@@ -53,7 +55,29 @@ export interface SessionRow {
   agentsRunning: number
 }
 
+/** Ein Rechner im Umschalter: dieser oder eine SSH-Machine aus herdr */
+export interface MachineSummary {
+  id: string
+  label: string
+  /** Rechnername bzw. SSH-Ziel */
+  host: string
+  /** windows | macos | linux; leer, solange die Machine noch nie geantwortet hat */
+  os: string
+  local: boolean
+  /** Noch keine Antwort und kein Fehler seit dem Start */
+  connecting: boolean
+  connected: boolean
+  error: string | null
+  live: number
+  approval: number
+  busy: number
+  waiting: number
+}
+
 export interface Overview {
+  /** Die Machine, deren Sessions `live` und `recent` zeigen */
+  machine: string
+  machines: MachineSummary[]
   live: SessionRow[]
   recent: SessionRow[]
   profiles: Profile[]
@@ -187,11 +211,11 @@ export interface Detail {
   stats: Stats
 }
 
-export const fetchOverview = (recentLimit: number) => invoke<Overview>('overview', { recentLimit })
-export const fetchDetail = (sessionId: string) => invoke<Detail>('session_detail', { sessionId })
-export const focusHerdr = (tabId: string) => invoke<void>('focus_herdr', { tabId })
-export const clearHerdr = (paneId: string) => invoke<void>('clear_herdr', { paneId })
-export const stopHerdr = (paneId: string) => invoke<void>('stop_herdr', { paneId })
+export const fetchOverview = (recentLimit: number, machine: string) => invoke<Overview>('overview', { recentLimit, machine })
+export const fetchDetail = (sessionId: string, machine: string) => invoke<Detail>('session_detail', { sessionId, machine })
+export const focusHerdr = (place: HerdrPlace) => invoke<void>('focus_herdr', { tabId: place.tabId, machine: place.machine })
+export const clearHerdr = (place: HerdrPlace) => invoke<void>('clear_herdr', { paneId: place.paneId, machine: place.machine })
+export const stopHerdr = (place: HerdrPlace) => invoke<void>('stop_herdr', { paneId: place.paneId, machine: place.machine })
 export const openFolder = (path: string) => invoke<void>('open_folder', { path })
 export const openSession = (pid: number | null, cwd: string, entrypoint: string) =>
   invoke<void>('open_session', { pid, cwd, entrypoint })

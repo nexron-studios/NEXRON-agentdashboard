@@ -1,6 +1,7 @@
 mod favicon;
 mod herdr;
 mod quota;
+mod remote;
 mod sessions;
 mod steps;
 mod topics;
@@ -12,7 +13,7 @@ use serde::Serialize;
 use sessions::{LiveSession, Profile};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use transcript::{AgentRun, Context, Stats, Transcript};
 
@@ -35,7 +36,13 @@ struct AppState {
     quota: quota::QuotaCache,
     /// Wann ein vollständig gelesenes Transkript zuletzt gebraucht wurde; zum Aufräumen von `details`
     detail_used: Mutex<HashMap<String, Instant>>,
+    machines: remote::Machines,
+    /// App-Cache; dort liegen die Spiegel der Transkripte anderer Machines
+    cache_dir: OnceLock<PathBuf>,
 }
+
+/// ID dieses Rechners im Machine-Umschalter; die anderen tragen ihre herdr-Machine-ID
+const LOCAL_MACHINE: &str = "local";
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -75,10 +82,49 @@ struct SessionRow {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Overview {
+    /// Die Machine, deren Sessions `live` und `recent` zeigen
+    machine: String,
+    machines: Vec<MachineSummary>,
     live: Vec<SessionRow>,
     recent: Vec<SessionRow>,
     profiles: Vec<Profile>,
     herdr_available: bool,
+}
+
+/// Ein Eintrag im Machine-Umschalter, mit den Zählern, die die Kopfzeile für die gezeigte Machine hat
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MachineSummary {
+    id: String,
+    label: String,
+    /// Rechnername bzw. SSH-Ziel, für den Tooltip
+    host: String,
+    /// windows | macos | linux; leer, solange eine Machine noch nie geantwortet hat
+    os: String,
+    local: bool,
+    connecting: bool,
+    connected: bool,
+    error: Option<String>,
+    live: usize,
+    approval: usize,
+    busy: usize,
+    waiting: usize,
+}
+
+impl MachineSummary {
+    /// Gleiche Regeln wie die Zähler in der Kopfzeile (`format.ts`)
+    fn count(mut self, rows: &[SessionRow]) -> Self {
+        self.live = rows.len();
+        for r in rows {
+            match r.status.as_str() {
+                "blocked" | "waiting" => self.approval += 1,
+                "busy" | "shell" => self.busy += 1,
+                "idle" | "done" if r.prompts > 0 => self.waiting += 1,
+                _ => {}
+            }
+        }
+        self
+    }
 }
 
 #[derive(Serialize)]
@@ -136,7 +182,7 @@ impl AppState {
 
     /// Hält die Zwischenspeicher klein, auch wenn die App tagelang läuft: Dateienden nur für die gerade
     /// gelistete „Zuletzt“-Auswahl, vollständige Transkripte für laufende plus die zuletzt geöffneten.
-    fn evict(&self, live_ids: &HashSet<&str>, recent_paths: &HashSet<PathBuf>) {
+    fn evict(&self, live_ids: &HashSet<String>, recent_paths: &HashSet<PathBuf>) {
         self.tails.lock().unwrap().retain(|p, _| recent_paths.contains(p));
         let mut used = self.detail_used.lock().unwrap();
         let mut ended: Vec<(String, Instant)> =
@@ -150,6 +196,19 @@ impl AppState {
             details.remove(&id);
             used.remove(&id);
         }
+    }
+
+    fn remotes(&self) -> Vec<Arc<remote::Remote>> {
+        match self.cache_dir.get() {
+            Some(dir) => self.machines.remotes(dir),
+            None => Vec::new(),
+        }
+    }
+
+    /// Die andere Machine mit dieser ID; `None` für diesen Rechner (und für unbekannte IDs)
+    fn remote(&self, machine: Option<&str>) -> Option<Arc<remote::Remote>> {
+        let id = machine.filter(|m| *m != LOCAL_MACHINE)?;
+        self.remotes().into_iter().find(|r| r.id == id)
     }
 
     fn herdr_places(&self, live: &[LiveSession]) -> HashMap<u32, HerdrPlace> {
@@ -234,37 +293,84 @@ fn row(stats: &Stats, session_id: String, account: String, live: Option<&LiveSes
 }
 
 #[tauri::command]
-async fn overview(recent_limit: usize, state: tauri::State<'_, AppState>) -> Result<Overview, String> {
+async fn overview(recent_limit: usize, machine: Option<String>, state: tauri::State<'_, AppState>) -> Result<Overview, String> {
     let profiles = state.profiles();
     let live = sessions::live_sessions(&profiles);
     let mut places = state.herdr_places(&live);
     let herdr_available = !places.is_empty();
-    let live_ids: HashSet<&str> = live.iter().map(|l| l.session_id.as_str()).collect();
-
-    let live_rows = live
+    let local_rows: Vec<SessionRow> = live
         .iter()
         .map(|l| {
-            let id = l.session_id.clone();
             let place = places.remove(&l.pid);
-            let path = || sessions::find_transcript(&l.profile_dir, &id);
-            // Eine frisch gestartete Session hat noch kein Transkript.
-            state
-                .full(&id, path, |s| {
-                    let mut r = row(s, id.clone(), l.account.clone(), Some(l), place.clone());
-                    r.topic = state.topics.topic(&id, s, Some(&l.profile_dir), true);
-                    r.title_pending = title_pending(s, &r.topic, &state.topics, &id);
-                    r
-                })
-                .unwrap_or_else(|_| row(&Stats::default(), id.clone(), l.account.clone(), Some(l), place.clone()))
+            live_row(&state, l, place, Some(&l.profile_dir), || sessions::find_transcript(&l.profile_dir, &l.session_id))
         })
         .collect();
-    let recent: Vec<_> = sessions::recent_transcripts(&profiles, recent_limit + live.len())
+
+    // Alle Machines rechnen ihre Karten, damit der Umschalter auch für die verdeckten Freigaben zeigt.
+    // Für andere Machines ist das billig: Ihre Spiegel werden wie lokale Transkripte nur fortgelesen.
+    let mut summaries = vec![local_summary().count(&local_rows)];
+    let mut live_ids: HashSet<String> = live.iter().map(|l| l.session_id.clone()).collect();
+    let mut shown: Option<(Arc<remote::Remote>, remote::View, Vec<SessionRow>)> = None;
+    for r in state.remotes() {
+        let view = r.view();
+        let rows: Vec<SessionRow> = view
+            .live
+            .iter()
+            .map(|l| {
+                let path = r.full_path(&l.session_id);
+                live_row(&state, l, view.places.get(&l.session_id).cloned(), None, || path.is_file().then_some(path.clone()))
+            })
+            .collect();
+        live_ids.extend(view.live.iter().map(|l| l.session_id.clone()));
+        summaries.push(remote_summary(&r, &view).count(&rows));
+        if machine.as_deref() == Some(r.id.as_str()) {
+            shown = Some((r, view, rows));
+        }
+    }
+
+    let (machine, live_rows, recent_rows, profiles, herdr_available, recent_paths) = match shown {
+        Some((r, view, rows)) => {
+            let (recent_rows, paths) = remote_recent_rows(&state, &r, &view, recent_limit);
+            (r.id.clone(), rows, recent_rows, view.profiles, !view.places.is_empty(), paths)
+        }
+        None => {
+            let (recent_rows, paths) = local_recent_rows(&state, &profiles, &live_ids, recent_limit);
+            (LOCAL_MACHINE.to_string(), local_rows, recent_rows, profiles, herdr_available, paths)
+        }
+    };
+    state.evict(&live_ids, &recent_paths);
+    Ok(Overview { machine, machines: summaries, live: live_rows, recent: recent_rows, profiles, herdr_available })
+}
+
+/// Karte einer laufenden Session. `profile_dir` bestimmt das Abo für Haiku-Titel; ohne (andere
+/// Machine) nimmt `claude -p` das Standardprofil dieses Rechners.
+fn live_row(
+    state: &AppState,
+    l: &LiveSession,
+    place: Option<HerdrPlace>,
+    profile_dir: Option<&Path>,
+    path: impl FnOnce() -> Option<PathBuf>,
+) -> SessionRow {
+    let id = l.session_id.clone();
+    // Eine frisch gestartete Session hat noch kein Transkript.
+    state
+        .full(&id, path, |s| {
+            let mut r = row(s, id.clone(), l.account.clone(), Some(l), place.clone());
+            r.topic = state.topics.topic(&id, s, profile_dir, true);
+            r.title_pending = title_pending(s, &r.topic, &state.topics, &id);
+            r
+        })
+        .unwrap_or_else(|_| row(&Stats::default(), id.clone(), l.account.clone(), Some(l), place.clone()))
+}
+
+fn local_recent_rows(state: &AppState, profiles: &[Profile], live_ids: &HashSet<String>, limit: usize) -> (Vec<SessionRow>, HashSet<PathBuf>) {
+    let recent: Vec<_> = sessions::recent_transcripts(profiles, limit + live_ids.len())
         .into_iter()
-        .filter(|r| !live_ids.contains(r.session_id.as_str()))
-        .take(recent_limit)
+        .filter(|r| !live_ids.contains(&r.session_id))
+        .take(limit)
         .collect();
-    let recent_paths: HashSet<PathBuf> = recent.iter().map(|r| r.path.clone()).collect();
-    let recent_rows = recent
+    let paths = recent.iter().map(|r| r.path.clone()).collect();
+    let rows = recent
         .into_iter()
         .map(|r| {
             let stats = state.tail(&r.path);
@@ -272,19 +378,116 @@ async fn overview(recent_limit: usize, state: tauri::State<'_, AppState>) -> Res
             SessionRow { topic, ..row(&stats, r.session_id, r.account, None, None) }
         })
         .collect();
+    (rows, paths)
+}
 
-    state.evict(&live_ids, &recent_paths);
-    Ok(Overview { live: live_rows, recent: recent_rows, profiles, herdr_available })
+/// Beendete Sessions einer anderen Machine aus ihren Anfang-und-Ende-Spiegeln. Was noch nicht
+/// gespiegelt ist, fehlt kurz und kommt im nächsten Takt dazu.
+fn remote_recent_rows(state: &AppState, r: &remote::Remote, view: &remote::View, limit: usize) -> (Vec<SessionRow>, HashSet<PathBuf>) {
+    let live: HashSet<&str> = view.live.iter().map(|l| l.session_id.as_str()).collect();
+    let recent: Vec<_> = view
+        .recent
+        .iter()
+        .filter(|x| !live.contains(x.session_id.as_str()))
+        .map(|x| (x, r.tail_path(&x.session_id)))
+        .filter(|(_, path)| path.is_file())
+        .take(limit)
+        .collect();
+    let paths = recent.iter().map(|(_, p)| p.clone()).collect();
+    let rows = recent
+        .into_iter()
+        .map(|(x, path)| {
+            let stats = state.tail(&path);
+            let topic = state.topics.cached(&x.session_id, &stats);
+            SessionRow { topic, ..row(&stats, x.session_id.clone(), x.account.clone(), None, None) }
+        })
+        .collect();
+    (rows, paths)
+}
+
+fn local_summary() -> MachineSummary {
+    let os = if cfg!(windows) { "windows" } else if cfg!(target_os = "macos") { "macos" } else { "linux" };
+    MachineSummary {
+        id: LOCAL_MACHINE.into(),
+        label: match os {
+            "macos" => "Dieser Mac",
+            "windows" => "Dieser PC",
+            _ => "Dieser Rechner",
+        }
+        .into(),
+        host: computer_name().to_string(),
+        os: os.into(),
+        local: true,
+        connecting: false,
+        connected: true,
+        error: None,
+        live: 0,
+        approval: 0,
+        busy: 0,
+        waiting: 0,
+    }
+}
+
+fn remote_summary(r: &remote::Remote, view: &remote::View) -> MachineSummary {
+    MachineSummary {
+        id: r.id.clone(),
+        label: r.label.clone(),
+        host: r.target().to_string(),
+        os: view.os.clone(),
+        local: false,
+        connecting: view.connecting,
+        connected: view.connected,
+        error: view.error.clone(),
+        live: 0,
+        approval: 0,
+        busy: 0,
+        waiting: 0,
+    }
+}
+
+/// Name dieses Rechners, wie ihn das System zeigt („MacBook Pro von Jonas“)
+fn computer_name() -> &'static str {
+    static NAME: OnceLock<String> = OnceLock::new();
+    NAME.get_or_init(|| {
+        let from_env = std::env::var("COMPUTERNAME").or_else(|_| std::env::var("HOSTNAME")).ok();
+        let mac = || sessions::run_quiet(Path::new("scutil"), &["--get", "ComputerName"]).map(|s| s.trim().to_string());
+        from_env.or_else(mac).unwrap_or_default()
+    })
 }
 
 #[tauri::command]
-async fn session_detail(session_id: String, state: tauri::State<'_, AppState>) -> Result<Detail, String> {
+async fn session_detail(session_id: String, machine: Option<String>, state: tauri::State<'_, AppState>) -> Result<Detail, String> {
+    if let Some(r) = state.remote(machine.as_deref()) {
+        return remote_detail(&state, &r, session_id);
+    }
     let profiles = state.profiles();
     let live = sessions::live_sessions(&profiles).into_iter().find(|s| s.session_id == session_id);
     let herdr = live.as_ref().and_then(|l| state.herdr_places(std::slice::from_ref(l)).remove(&l.pid));
     let found = sessions::find_transcript_any(&profiles, &session_id);
     let account = live.as_ref().map(|l| l.account.clone()).or_else(|| found.as_ref().map(|f| f.1.clone())).unwrap_or_default();
     let stats = state.full(&session_id, || found.map(|f| f.0), Stats::clone)?;
+    let status = status(live.as_ref(), herdr.as_ref());
+    let topic = state.topics.cached(&session_id, &stats);
+    let title_pending = live.is_some() && title_pending(&stats, &topic, &state.topics, &session_id);
+    Ok(Detail { session_id, live, status, account, herdr, topic, title_pending, stats })
+}
+
+/// Detail einer Session auf einer anderen Machine. Ist sie beendet, schickt die Machine ihr Transkript
+/// erst jetzt vollständig; bis es da ist, füllt sich die Ansicht mit jedem Abruf weiter.
+fn remote_detail(state: &AppState, r: &remote::Remote, session_id: String) -> Result<Detail, String> {
+    let view = r.view();
+    let live = view.live.iter().find(|l| l.session_id == session_id).cloned();
+    if live.is_none() {
+        r.want(&session_id);
+    }
+    let herdr = view.places.get(&session_id).cloned();
+    let account = live
+        .as_ref()
+        .map(|l| l.account.clone())
+        .or_else(|| view.recent.iter().find(|x| x.session_id == session_id).map(|x| x.account.clone()))
+        .unwrap_or_default();
+    let path = r.full_path(&session_id);
+    let stats = state.full(&session_id, || path.is_file().then_some(path.clone()), Stats::clone)?;
     let status = status(live.as_ref(), herdr.as_ref());
     let topic = state.topics.cached(&session_id, &stats);
     let title_pending = live.is_some() && title_pending(&stats, &topic, &state.topics, &session_id);
@@ -304,18 +507,18 @@ async fn quota(app: tauri::AppHandle) -> Result<Vec<quota::AccountQuota>, String
 }
 
 #[tauri::command]
-async fn focus_herdr(tab_id: String) -> Result<(), String> {
-    herdr::focus_tab(&tab_id)
+async fn focus_herdr(tab_id: String, machine: Option<String>, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    herdr::focus_tab(state.remote(machine.as_deref()).as_deref(), &tab_id)
 }
 
 #[tauri::command]
-async fn clear_herdr(pane_id: String) -> Result<(), String> {
-    herdr::clear_chat(&pane_id)
+async fn clear_herdr(pane_id: String, machine: Option<String>, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    herdr::clear_chat(state.remote(machine.as_deref()).as_deref(), &pane_id)
 }
 
 #[tauri::command]
-async fn stop_herdr(pane_id: String) -> Result<(), String> {
-    herdr::stop_agent(&pane_id)
+async fn stop_herdr(pane_id: String, machine: Option<String>, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    herdr::stop_agent(state.remote(machine.as_deref()).as_deref(), &pane_id)
 }
 
 /// Öffnet den Arbeitsordner einer Session im Datei-Explorer. Nur bestehende Ordner, damit aus
@@ -453,6 +656,9 @@ pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             use tauri::Manager;
+            if let Ok(dir) = app.path().app_cache_dir() {
+                let _ = app.state::<AppState>().cache_dir.set(dir);
+            }
             if let Some(win) = app.get_webview_window("main") {
                 fit_to_monitor(&win);
                 if let Ok(size) = win.inner_size() {

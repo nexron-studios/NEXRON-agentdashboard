@@ -3,7 +3,9 @@
 //! herdr kennt Tabs („claude-3“) und Panes, aber keine Claude-Session-IDs. Die Brücke ist die PID:
 //! `herdr pane process-info` nennt den Prozess im Vordergrund des Panes, und dieselbe PID steht in
 //! `sessions/<pid>.json` des Claude-Profils. Ohne herdr oder ohne laufenden herdr-Server bleibt alles leer.
+//! Auf anderen Machines (remote.rs) gibt es keine PIDs zum Abgleichen; dort nennt herdr die Session-ID selbst.
 
+use crate::remote::Remote;
 use crate::sessions::run_quiet;
 use serde::Serialize;
 use serde_json::Value;
@@ -22,6 +24,8 @@ pub struct HerdrPlace {
     pub title: String,
     /// working | blocked | idle | done | unknown: herdr liest das am Terminal ab
     pub status: String,
+    /// herdr-Machine, auf der der Tab liegt; `None` auf diesem Rechner. Aktionen gehen dorthin.
+    pub machine: Option<String>,
 }
 
 /// PID je Terminal; eine Pane-Abfrage kostet einen Prozessstart, deshalb nur bei neuen Terminals.
@@ -40,11 +44,64 @@ fn binary() -> &'static Option<PathBuf> {
     })
 }
 
-fn call(args: &[&str]) -> Option<Value> {
-    let bin = binary().as_ref()?;
-    let out = run_quiet(bin, args)?;
+/// Ein herdr-Befehl auf diesem Rechner oder, mit `remote`, über SSH auf einer anderen Machine.
+fn call_on(remote: Option<&Remote>, args: &[&str]) -> Option<Value> {
+    let out = match remote {
+        Some(r) => r.herdr(args)?,
+        None => run_quiet(binary().as_ref()?, args)?,
+    };
     let v: Value = serde_json::from_str(&out).ok()?;
     Some(v["result"].clone())
+}
+
+fn call(args: &[&str]) -> Option<Value> {
+    call_on(None, args)
+}
+
+/// Gespeicherte SSH-Machines aus `herdr machine list`, nur eingeschaltete: (id, label, ssh-Ziel)
+pub fn saved_machines() -> Vec<(String, String, String)> {
+    let Some(out) = binary().as_ref().and_then(|bin| run_quiet(bin, &["machine", "list", "--json"])) else { return Vec::new() };
+    let list: Vec<Value> = serde_json::from_str(&out).unwrap_or_default();
+    list.iter()
+        .filter(|m| m["enabled"].as_bool().unwrap_or(true))
+        .filter_map(|m| Some((m["id"].as_str()?.to_string(), m["label"].as_str()?.to_string(), m["target"].as_str()?.to_string())))
+        .collect()
+}
+
+fn label_of(snap: &Value, list: &str, key: &str, id: &str) -> String {
+    snap[list]
+        .as_array()
+        .and_then(|a| a.iter().find(|x| x[key] == id))
+        .and_then(|x| x["label"].as_str())
+        .unwrap_or("")
+        .to_string()
+}
+
+fn place(snap: &Value, pane: &Value, machine: Option<&str>) -> HerdrPlace {
+    let tab_id = pane["tab_id"].as_str().unwrap_or("");
+    HerdrPlace {
+        workspace: label_of(snap, "workspaces", "workspace_id", pane["workspace_id"].as_str().unwrap_or("")),
+        tab: label_of(snap, "tabs", "tab_id", tab_id),
+        tab_id: tab_id.to_string(),
+        pane_id: pane["pane_id"].as_str().unwrap_or("").to_string(),
+        title: pane["terminal_title_stripped"].as_str().unwrap_or("").to_string(),
+        status: pane["agent_status"].as_str().unwrap_or("").to_string(),
+        machine: machine.map(str::to_string),
+    }
+}
+
+/// Ort jeder Claude-Session in einem herdr-Snapshot einer anderen Machine, nach Session-ID. Dort
+/// gibt es keine PIDs zum Abgleichen, aber herdr nennt die Session-ID des Agents selbst.
+pub fn places_by_session(snapshot_json: &str, machine: &str) -> HashMap<String, HerdrPlace> {
+    let Ok(v) = serde_json::from_str::<Value>(snapshot_json) else { return HashMap::new() };
+    let snap = &v["result"]["snapshot"];
+    snap["panes"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|pane| pane["agent"] == "claude")
+        .filter_map(|pane| Some((pane["agent_session"]["value"].as_str()?.to_string(), place(snap, pane, Some(machine)))))
+        .collect()
 }
 
 impl HerdrCache {
@@ -53,14 +110,6 @@ impl HerdrCache {
     pub fn places(&mut self, live_pids: &HashSet<u32>) -> HashMap<u32, HerdrPlace> {
         let Some(snapshot) = call(&["api", "snapshot"]) else { return HashMap::new() };
         let snap = &snapshot["snapshot"];
-        let label_of = |list: &str, key: &str, id: &str| {
-            snap[list]
-                .as_array()
-                .and_then(|a| a.iter().find(|x| x[key] == id))
-                .and_then(|x| x["label"].as_str())
-                .unwrap_or("")
-                .to_string()
-        };
 
         let mut out = HashMap::new();
         let mut seen = HashSet::new();
@@ -80,18 +129,7 @@ impl HerdrCache {
                 }
             };
             let Some(pid) = pid else { continue };
-            let tab_id = pane["tab_id"].as_str().unwrap_or("");
-            out.insert(
-                pid,
-                HerdrPlace {
-                    workspace: label_of("workspaces", "workspace_id", pane["workspace_id"].as_str().unwrap_or("")),
-                    tab: label_of("tabs", "tab_id", tab_id),
-                    tab_id: tab_id.to_string(),
-                    pane_id: pane_id.to_string(),
-                    title: pane["terminal_title_stripped"].as_str().unwrap_or("").to_string(),
-                    status: pane["agent_status"].as_str().unwrap_or("").to_string(),
-                },
-            );
+            out.insert(pid, place(snap, pane, None));
         }
         self.pid_by_terminal.retain(|t, _| seen.contains(t));
         out
@@ -108,16 +146,16 @@ fn pane_pid(pane_id: &str) -> Option<u32> {
     claude.or_else(|| info["foreground_process_group_id"].as_u64()).map(|p| p as u32)
 }
 
-pub fn focus_tab(tab_id: &str) -> Result<(), String> {
-    call(&["tab", "focus", tab_id]).map(|_| ()).ok_or_else(|| "herdr hat den Tab nicht fokussiert. Läuft herdr?".into())
+pub fn focus_tab(remote: Option<&Remote>, tab_id: &str) -> Result<(), String> {
+    call_on(remote, &["tab", "focus", tab_id]).map(|_| ()).ok_or_else(|| "herdr hat den Tab nicht fokussiert. Läuft herdr?".into())
 }
 
 /// Tippt `/clear` in den Chat des Panes, als hätte man es selbst eingegeben. Der Status wird hier noch
 /// einmal frisch abgefragt, denn die Karte kann bis zu 2 s alt sein: Während Claude arbeitet, würde der
 /// Befehl eingereiht und den Verlauf mitten in der Aufgabe löschen. Eine offene Freigabe-Frage weist
 /// `agent prompt` selbst ab, bevor es etwas sendet.
-pub fn clear_chat(pane_id: &str) -> Result<(), String> {
-    let info = call(&["agent", "get", pane_id]).ok_or("herdr findet diesen Chat nicht mehr. Läuft herdr?")?;
+pub fn clear_chat(remote: Option<&Remote>, pane_id: &str) -> Result<(), String> {
+    let info = call_on(remote, &["agent", "get", pane_id]).ok_or("herdr findet diesen Chat nicht mehr. Läuft herdr?")?;
     let agent = &info["agent"];
     if agent["agent"] != "claude" {
         return Err("In diesem herdr-Tab läuft kein Claude mehr.".into());
@@ -125,15 +163,15 @@ pub fn clear_chat(pane_id: &str) -> Result<(), String> {
     if !matches!(agent["agent_status"].as_str(), Some("idle" | "done")) {
         return Err("Claude arbeitet gerade oder wartet auf eine Freigabe. Löschen geht erst, wenn er fertig ist.".into());
     }
-    call(&["agent", "prompt", pane_id, "/clear"])
+    call_on(remote, &["agent", "prompt", pane_id, "/clear"])
         .map(|_| ())
         .ok_or_else(|| "herdr hat /clear nicht gesendet.".into())
 }
 
 /// Bricht die laufende Antwort ab wie Esc im Terminal. Nur während Claude arbeitet: Bei einer offenen
 /// Freigabe-Frage würde Esc die Freigabe ablehnen, und im Leerlauf gibt es nichts zu stoppen.
-pub fn stop_agent(pane_id: &str) -> Result<(), String> {
-    let info = call(&["agent", "get", pane_id]).ok_or("herdr findet diesen Chat nicht mehr. Läuft herdr?")?;
+pub fn stop_agent(remote: Option<&Remote>, pane_id: &str) -> Result<(), String> {
+    let info = call_on(remote, &["agent", "get", pane_id]).ok_or("herdr findet diesen Chat nicht mehr. Läuft herdr?")?;
     let agent = &info["agent"];
     if agent["agent"] != "claude" {
         return Err("In diesem herdr-Tab läuft kein Claude mehr.".into());
@@ -141,7 +179,7 @@ pub fn stop_agent(pane_id: &str) -> Result<(), String> {
     if agent["agent_status"] != "working" {
         return Err("Claude arbeitet gerade nicht, es gibt nichts zu stoppen.".into());
     }
-    call(&["agent", "send-keys", pane_id, "esc"])
+    call_on(remote, &["agent", "send-keys", pane_id, "esc"])
         .map(|_| ())
         .ok_or_else(|| "herdr hat Esc nicht gesendet.".into())
 }

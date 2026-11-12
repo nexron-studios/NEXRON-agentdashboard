@@ -84,17 +84,33 @@ const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' })
 export const byTab = (a: string | undefined, b: string | undefined) =>
   a && b ? collator.compare(a, b) : a ? -1 : b ? 1 : 0
 
-/** Ruft `task` sofort und danach alle `ms` auf, ohne dass sich Aufrufe überholen. */
-export function usePolling(task: () => Promise<void>, ms: number): { now: Ref<number> } {
+/**
+ * Ruft `task` sofort und danach alle `ms` auf, ohne dass sich Aufrufe überholen. `refresh` holt den
+ * nächsten Aufruf vor (z. B. nach einem Wechsel der Machine); läuft gerade einer, folgt er direkt danach.
+ */
+export function usePolling(task: () => Promise<void>, ms: number): { now: Ref<number>; refresh: () => void } {
   const now = ref(Date.now())
   let timer: number | undefined
   let stopped = false
+  let running = false
+  let again = false
   const tick = async () => {
+    if (running) {
+      again = true
+      return
+    }
+    running = true
+    window.clearTimeout(timer)
     try {
       await task()
     } finally {
+      running = false
       now.value = Date.now()
-      if (!stopped) timer = window.setTimeout(tick, ms)
+      if (stopped) return
+      if (again) {
+        again = false
+        void tick()
+      } else timer = window.setTimeout(tick, ms)
     }
   }
   onMounted(tick)
@@ -102,7 +118,7 @@ export function usePolling(task: () => Promise<void>, ms: number): { now: Ref<nu
     stopped = true
     window.clearTimeout(timer)
   })
-  return { now }
+  return { now, refresh: () => void tick() }
 }
 
 /**

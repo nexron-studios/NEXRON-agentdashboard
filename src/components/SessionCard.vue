@@ -174,7 +174,7 @@ const tool = computed(() => toolKind(action.value.tool))
             <span v-if="action.tool" class="mr-1.5 font-mono text-[12px] text-ink">{{ action.tool }}</span>{{ action.detail }}
           </p>
         </template>
-        <SessionStop v-if="working && s.live && s.herdr" :pane-id="s.herdr.paneId" class="ml-auto" />
+        <SessionStop v-if="working && s.live && s.herdr" :herdr="s.herdr" class="ml-auto" />
       </div>
     </div>
 

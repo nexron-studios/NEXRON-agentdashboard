@@ -1,14 +1,19 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { ChevronDown, CircleCheck, History, Radio, Search, TriangleAlert, UserRound } from 'lucide-vue-next'
+import { ChevronDown, CircleCheck, History, Radio, Search, TriangleAlert, Unplug, UserRound } from 'lucide-vue-next'
 import type { Overview, SessionRow } from '../api'
 import { awaitsYou, byTab, dayLabel, headline, projectName, time } from '../format'
-import { accountInfo } from '../store'
+import { accountInfo, isRemote, machine, machines } from '../store'
 import FinishedStrip from './FinishedStrip.vue'
+import MachineSwitch from './MachineSwitch.vue'
 import SessionCard from './SessionCard.vue'
 
 const props = defineProps<{ overview: Overview | null; error: string; now: number }>()
-const emit = defineEmits<{ select: [id: string] }>()
+const emit = defineEmits<{ select: [id: string]; machine: [id: string] }>()
+
+const hasMachines = computed(() => machines.value.length > 1)
+// Ein anderer Rechner, der (noch) nicht antwortet: Platzhalter beim Verbinden, sonst der Grund
+const offline = computed(() => (isRemote.value && machine.value && !machine.value.connected ? machine.value : null))
 
 const COLLAPSED = 6
 
@@ -56,15 +61,26 @@ const groups = computed(() => {
       <div class="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2">
         <h2 class="flex items-center gap-2.5 text-[20px] font-semibold tracking-tight">
           <Radio :size="20" :stroke-width="2" class="radio-pulse text-ink-3" /> Laufende Sessions
-          <span class="num rounded-full bg-surface-2 px-2.5 text-[14px] font-medium text-ink-2">{{ live.length }}</span>
+          <!-- Mit Umschalter steht die Zahl dort, je Rechner -->
+          <span v-if="!hasMachines" class="num rounded-full bg-surface-2 px-2.5 text-[14px] font-medium text-ink-2">{{ live.length }}</span>
         </h2>
+        <MachineSwitch v-if="hasMachines" @select="emit('machine', $event)" />
         <span v-if="live.length" class="ml-auto flex items-center gap-1.5 text-[12px] font-semibold tracking-wide text-ink-3 uppercase">
           <CircleCheck :size="14" :stroke-width="2.25" class="text-good" /> Fertig · neueste zuerst
         </span>
       </div>
 
-      <div v-if="!overview && !error" class="grid gap-4 min-[760px]:grid-cols-2 min-[1150px]:grid-cols-3">
+      <div v-if="(!overview && !error) || offline?.connecting" class="grid gap-4 min-[760px]:grid-cols-2 min-[1150px]:grid-cols-3">
         <div v-for="i in 2" :key="i" class="card h-64 animate-pulse" />
+      </div>
+      <div v-else-if="offline" class="card flex flex-col items-center gap-3 px-6 py-12 text-center">
+        <span class="flex h-12 w-12 items-center justify-center rounded-xl border border-line bg-surface-2">
+          <Unplug :size="22" :stroke-width="1.75" class="text-ink-3" />
+        </span>
+        <b class="text-[16px] font-semibold">{{ offline.label }} ist nicht erreichbar</b>
+        <span class="max-w-[60ch] text-[13px] text-ink-3">
+          {{ offline.error }} · Das Dashboard verbindet sich alle 10 Sekunden neu über <code class="font-mono">ssh {{ offline.host }}</code>.
+        </span>
       </div>
       <div v-else-if="!live.length" class="card flex flex-col items-center gap-2 px-6 py-12 text-center text-ink-2">
         <Radio :size="28" class="text-ink-3" />
@@ -94,6 +110,7 @@ const groups = computed(() => {
       <div class="mb-4 flex flex-wrap items-center gap-3">
         <h2 class="flex items-center gap-2.5 text-[20px] font-semibold tracking-tight">
           <History :size="20" :stroke-width="2" class="history-rewind text-ink-2" /> Zuletzt
+          <span v-if="hasMachines && machine" class="text-[14px] font-medium text-ink-3">· {{ machine.label }}</span>
         </h2>
         <label class="relative ml-auto w-80 max-w-full">
           <Search :size="16" class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ink-3" />

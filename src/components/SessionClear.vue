@@ -30,7 +30,7 @@ function setOpen(value: boolean) {
 
 async function clear() {
   try {
-    await clearHerdr(props.herdr.paneId)
+    await clearHerdr(props.herdr)
     failed.value = ''
     emit('cleared')
   } catch (e) {

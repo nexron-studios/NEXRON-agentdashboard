@@ -16,6 +16,7 @@ import {
   Wrench,
 } from 'lucide-vue-next'
 import { fetchDetail, type Detail } from '../api'
+import { machineId } from '../store'
 import { agentKind, KIND_CHIP, toolKind } from '../kinds'
 import { date, duration, headline, modelName, PENDING_TITLE, time, tokens, usd, usePolling } from '../format'
 import FolderLink from './FolderLink.vue'
@@ -35,7 +36,7 @@ const error = ref('')
 
 const { now } = usePolling(async () => {
   try {
-    detail.value = await fetchDetail(props.sessionId)
+    detail.value = await fetchDetail(props.sessionId, machineId.value)
     error.value = ''
   } catch (e) {
     error.value = String(e)

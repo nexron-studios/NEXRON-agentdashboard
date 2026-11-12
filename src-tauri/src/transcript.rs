@@ -20,7 +20,7 @@ const MAX_ERRORS: usize = 200;
 const MAX_PROMPTS: usize = 300;
 const PROMPT_CHARS: usize = 4000;
 /// Vom Dateianfang wird so viel gelesen, dass die erste Anfrage sicher dabei ist.
-const HEAD_BYTES: u64 = 400_000;
+pub(crate) const HEAD_BYTES: u64 = 400_000;
 const DEFAULT_WINDOW: u64 = 200_000;
 const LARGE_WINDOW: u64 = 1_000_000;
 const TASK_NOTIFICATION: &str = "<task-notification>";

@@ -23,8 +23,6 @@ const PAGE_UP: &str = "\\x15"; // ctrl+u
 const DOWN: &str = "j";
 const ENTER: &str = "\\r";
 const PAGE_ROWS: usize = 8;
-/// Pause zwischen zwei Tasten, damit herdr jede als eigenes Ereignis liest
-const KEY_DELAY_S: &str = "0.08";
 
 /// Eine Zeile im Navigator und die Zeilenzahl aller Machines davor und danach
 pub struct Target {
@@ -103,39 +101,43 @@ fn is_herdr_process(pid: &str) -> bool {
         .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).trim().rsplit('/').next() == Some("herdr"))
 }
 
+/// Tippt die Tasten in ein Ghostty-Terminal: argv = Terminal-ID, dann die Ghostty-Aktionen.
+/// Die Tasten kommen als Argumente statt im Skripttext, weil AppleScript `\x02` nicht kennt und das
+/// ganze Skript dann als Syntaxfehler ablehnt.
+#[cfg(target_os = "macos")]
+const TYPE_KEYS: &str = r#"on run argv
+  set wanted to item 1 of argv
+  set steps to rest of argv
+  tell application "Ghostty"
+    repeat with w in windows
+      repeat with t in tabs of w
+        repeat with term in terminals of t
+          if (id of term) is wanted then
+            repeat with s in steps
+              perform action (s as text) on term
+              delay 0.08
+            end repeat
+            return "sent"
+          end if
+        end repeat
+      end repeat
+    end repeat
+  end tell
+  return "missing"
+end run"#;
+
 /// Tippt die Tasten in jeden herdr-Client in Ghostty. Läuft keiner, passiert nichts.
 #[cfg(target_os = "macos")]
 pub fn send(target: &Target) -> Result<(), String> {
     if target.machine_only && selected_profile().as_ref() == Some(&target.profile) {
         return Ok(());
     }
-    let terminals = herdr_terminals()?;
-    if terminals.is_empty() {
-        return Ok(());
+    let actions: Vec<String> = keys(target).iter().map(|k| format!("text:{k}")).collect();
+    for terminal in herdr_terminals()? {
+        let args: Vec<String> = std::iter::once(terminal).chain(actions.iter().cloned()).collect();
+        osascript(TYPE_KEYS, &args)?;
     }
-    let steps: String = keys(target).iter().map(|k| format!("\"text:{k}\", ")).collect();
-    let script = format!(
-        r#"on run argv
-  set steps to {{{steps}""}}
-  tell application "Ghostty"
-    repeat with w in windows
-      repeat with t in tabs of w
-        repeat with term in terminals of t
-          if argv contains (id of term) then
-            repeat with s in steps
-              if (s as text) is not "" then
-                perform action (s as text) on term
-                delay {KEY_DELAY_S}
-              end if
-            end repeat
-          end if
-        end repeat
-      end repeat
-    end repeat
-  end tell
-end run"#
-    );
-    osascript(&script, &terminals).map(|_| ())
+    Ok(())
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -146,6 +148,16 @@ pub fn send(_target: &Target) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Kompiliert und startet das Skript gegen eine Terminal-ID, die es nicht gibt: tippt nichts,
+    /// fängt aber Syntaxfehler (so ist `\x02` im Skripttext zuerst durchgerutscht). Braucht Ghostty.
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore]
+    fn type_keys_script_runs() {
+        let args = vec!["no-such-terminal".to_string(), format!("text:{PREFIX}")];
+        assert_eq!(osascript(TYPE_KEYS, &args).unwrap().trim(), "missing");
+    }
 
     #[test]
     fn keys_reach_the_row_from_anywhere() {

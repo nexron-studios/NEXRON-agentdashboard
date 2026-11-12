@@ -112,9 +112,22 @@ const TYPE_KEYS: &str = r#"on run argv
   return "missing"
 end run"#;
 
-/// Tippt die Tasten in jeden herdr-Client in Ghostty und gibt zurück, in wie viele. Steht herdr
-/// schon auf der Ziel-Machine, wählt Enter sie nur noch einmal, das ändert nichts. (herdrs eigene
-/// Auswahl-Datei taugt nicht zum Überspringen: Sie ist nicht immer aktuell.)
+/// Machine, die der herdr-Client gerade zeigt: herdr schreibt sie bei jedem Wechsel nach
+/// `endpoint-selection.json` (`selected_profile`, `null` = Local). `None`, wenn die Datei fehlt.
+#[cfg(target_os = "macos")]
+pub fn selected_profile() -> Option<Option<String>> {
+    let home = std::env::var_os("HOME")?;
+    let path = std::path::Path::new(&home).join(".local/state/herdr/client/endpoint-selection.json");
+    let v: serde_json::Value = serde_json::from_slice(&std::fs::read(path).ok()?).ok()?;
+    Some(v["selected_profile"].as_str().map(str::to_string))
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn selected_profile() -> Option<Option<String>> {
+    None
+}
+
+/// Tippt die Tasten in jeden herdr-Client in Ghostty und gibt zurück, in wie viele.
 #[cfg(target_os = "macos")]
 pub fn send(target: &Target) -> Result<usize, String> {
     let actions: Vec<String> = keys(target).iter().map(|k| format!("text:{k}")).collect();

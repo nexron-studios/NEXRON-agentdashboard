@@ -510,10 +510,10 @@ async fn quota(app: tauri::AppHandle) -> Result<Vec<quota::AccountQuota>, String
 #[tauri::command]
 async fn focus_herdr(tab_id: String, pane_id: String, machine: Option<String>, state: tauri::State<'_, AppState>) -> Result<(), String> {
     let remote = state.remote(machine.as_deref());
-    if remote.is_some() {
-        // Auf einer anderen Machine holt nur herdrs eigene Tastatur den Client dorthin (herdr_follow.rs).
-        // Ohne herdr in Ghostty fokussiert wenigstens der Server den Tab.
-        follow(&state, machine.as_deref(), Some(&pane_id)).await?;
+    // Zeigt herdr schon diese Machine, reicht wie lokal der Tab-Fokus auf ihrem Server. Sonst holt nur
+    // herdrs eigene Tastatur den Client dorthin (herdr_follow.rs), direkt auf das Pane dieses Chats.
+    if remote.is_some() && !herdr_shows(machine.as_deref()) {
+        return follow(&state, machine.as_deref(), Some(&pane_id)).await;
     }
     herdr::focus_tab(remote.as_deref(), &tab_id)
 }
@@ -521,7 +521,16 @@ async fn focus_herdr(tab_id: String, pane_id: String, machine: Option<String>, s
 /// Der herdr-Client in Ghostty wechselt auf dieselbe Machine wie der Umschalter im Dashboard.
 #[tauri::command]
 async fn follow_in_herdr(machine: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    if herdr_shows(Some(&machine)) {
+        return Ok(());
+    }
     follow(&state, Some(&machine), None).await
+}
+
+/// Steht der herdr-Client schon auf dieser Machine? Ohne Auskunft von herdr: nein, dann wird getippt.
+fn herdr_shows(machine: Option<&str>) -> bool {
+    let profile = machine.filter(|m| *m != LOCAL_MACHINE).map(str::to_string);
+    herdr_follow::selected_profile() == Some(profile)
 }
 
 /// Schickt herdr zur Machine bzw. zum Pane und hält jeden Versuch in `herdr-follow.log` im App-Cache

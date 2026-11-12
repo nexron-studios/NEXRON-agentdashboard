@@ -52,7 +52,8 @@ fn osascript(script: &str, args: &[String]) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
-/// Ghostty-Terminals, in deren Vordergrund ein herdr-Client läuft. Ohne laufendes Ghostty leer:
+/// Ghostty-Terminals, in deren Vordergrund ein herdr-Client läuft. `character id 9` statt `tab`:
+/// Innerhalb von `tell application "Ghostty"` ist `tab` Ghosttys Tab-Klasse, nicht das Zeichen. Ohne laufendes Ghostty leer:
 /// `tell application` würde es sonst starten.
 #[cfg(target_os = "macos")]
 fn herdr_terminals() -> Result<Vec<String>, String> {
@@ -63,7 +64,7 @@ tell application "Ghostty"
   repeat with w in windows
     repeat with t in tabs of w
       repeat with term in terminals of t
-        set out to out & (id of term) & tab & (pid of term) & linefeed
+        set out to out & (id of term) & (character id 9) & (pid of term) & linefeed
       end repeat
     end repeat
   end repeat
@@ -145,6 +146,16 @@ mod tests {
     fn type_keys_script_runs() {
         let args = vec!["no-such-terminal".to_string(), format!("text:{PREFIX}")];
         assert_eq!(osascript(TYPE_KEYS, &args).unwrap().trim(), "missing");
+    }
+
+    /// Listet die herdr-Terminals in Ghostty, ohne etwas zu tippen. Braucht Ghostty mit herdr.
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore]
+    fn finds_herdr_terminals() {
+        let terminals = herdr_terminals().unwrap();
+        println!("{terminals:?}");
+        assert!(!terminals.is_empty());
     }
 
     #[test]

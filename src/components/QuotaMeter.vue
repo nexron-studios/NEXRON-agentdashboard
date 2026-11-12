@@ -38,14 +38,22 @@ const tooltip = (a: AccountQuota) =>
 </script>
 
 <template>
-  <div v-for="a in accounts" :key="a.label" class="flex flex-col gap-1 text-[11px]" :title="tooltip(a)">
-    <div v-for="w in a.windows" :key="w.key" class="flex items-center gap-2" :class="{ 'opacity-60': a.error }">
-      <span class="w-10 text-ink-2">{{ WINDOW_LABELS[w.key] ?? w.key }}</span>
-      <span class="h-1.5 w-28 overflow-hidden rounded-full bg-surface-3">
+  <!-- Grid with auto columns: the rows stay aligned while each column is only as wide as its
+       widest value. Fixed widths wasted room the crowded header needs, and wrapped "100 % frei". -->
+  <div
+    v-for="a in accounts"
+    :key="a.label"
+    class="grid grid-cols-[repeat(4,auto)] items-center gap-x-2 gap-y-1 whitespace-nowrap text-[11px]"
+    :class="{ 'opacity-60': a.error }"
+    :title="tooltip(a)"
+  >
+    <template v-for="w in a.windows" :key="w.key">
+      <span class="text-ink-2">{{ WINDOW_LABELS[w.key] ?? w.key }}</span>
+      <span class="h-1.5 w-24 overflow-hidden rounded-full bg-surface-3">
         <span class="block h-full rounded-full" :class="barColor(w)" :style="{ width: `${freePercent(w)}%` }" />
       </span>
-      <b class="num w-14 text-right text-ink">{{ freePercent(w) }} % frei</b>
-      <span class="num w-20 text-ink-3">{{ countdown(w) }}</span>
-    </div>
+      <b class="num text-right text-ink">{{ freePercent(w) }} % frei</b>
+      <span class="num text-ink-3">{{ countdown(w) }}</span>
+    </template>
   </div>
 </template>

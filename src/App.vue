@@ -57,18 +57,18 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       >
         <ArrowLeft :size="18" :stroke-width="2" /> Alle Sessions
       </button>
-      <div v-else class="flex items-center gap-3">
+      <div v-else class="flex shrink-0 items-center gap-3 whitespace-nowrap">
         <ClawdLogo :size="20" class="clawd-hop" />
         <span class="font-display text-[17px] font-semibold tracking-tight"><span class="text-brand">Agent</span> Dashboard</span>
         <span class="h-5 w-px bg-line-strong" aria-hidden="true" />
         <NexronLogo :height="30" />
       </div>
 
-      <div class="ml-auto flex items-center gap-4">
+      <div class="ml-auto flex shrink-0 items-center gap-4">
         <QuotaMeter />
       </div>
 
-      <div class="flex items-center gap-2 text-[13px]">
+      <div class="flex shrink-0 items-center gap-2 whitespace-nowrap text-[13px]">
         <span
           class="flex items-center gap-1.5 rounded-full border px-3 py-1"
           :class="counts.approval ? 'border-critical/40 bg-critical/12 text-ink' : 'border-line text-ink-3'"

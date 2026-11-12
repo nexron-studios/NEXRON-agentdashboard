@@ -1,5 +1,6 @@
 mod favicon;
 mod herdr;
+mod herdr_follow;
 mod quota;
 mod remote;
 mod sessions;
@@ -507,8 +508,45 @@ async fn quota(app: tauri::AppHandle) -> Result<Vec<quota::AccountQuota>, String
 }
 
 #[tauri::command]
-async fn focus_herdr(tab_id: String, machine: Option<String>, state: tauri::State<'_, AppState>) -> Result<(), String> {
-    herdr::focus_tab(state.remote(machine.as_deref()).as_deref(), &tab_id)
+async fn focus_herdr(tab_id: String, pane_id: String, machine: Option<String>, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    let remote = state.remote(machine.as_deref());
+    if remote.is_some() {
+        // Auf einer anderen Machine holt nur herdrs eigene Tastatur den Client dorthin (herdr_follow.rs).
+        // Ohne herdr in Ghostty fokussiert wenigstens der Server den Tab.
+        let target = navigator_target(&state, machine.as_deref(), Some(&pane_id))?;
+        tauri::async_runtime::spawn_blocking(move || herdr_follow::send(&target)).await.map_err(|e| e.to_string())??;
+    }
+    herdr::focus_tab(remote.as_deref(), &tab_id)
+}
+
+/// Der herdr-Client in Ghostty wechselt auf dieselbe Machine wie der Umschalter im Dashboard.
+#[tauri::command]
+async fn follow_in_herdr(machine: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    let target = navigator_target(&state, Some(&machine), None)?;
+    tauri::async_runtime::spawn_blocking(move || herdr_follow::send(&target)).await.map_err(|e| e.to_string())?
+}
+
+/// Zeile im herdr-Navigator: die Machine selbst oder, mit `pane_id`, ein Pane darunter. Die Reihenfolge
+/// ist die des herdr-Clients: Local, dann die gespeicherten Machines wie in `herdr machine list`.
+fn navigator_target(state: &AppState, machine: Option<&str>, pane_id: Option<&str>) -> Result<herdr_follow::Target, String> {
+    let profile = machine.filter(|m| *m != LOCAL_MACHINE).map(str::to_string);
+    let local = herdr::local_navigator_rows().ok_or("herdr läuft auf diesem Rechner nicht")?;
+    let mut endpoints = vec![(None, local)];
+    endpoints.extend(state.remotes().iter().map(|r| (Some(r.id.clone()), r.view().navigator_rows)));
+    let mut offset = 0;
+    let mut row = None;
+    for (id, rows) in &endpoints {
+        if *id == profile {
+            let within = match pane_id {
+                None => Some(0),
+                Some(p) => rows.iter().position(|r| r.as_deref() == Some(p)).map(|i| i + 1),
+            };
+            row = within.map(|w| offset + w);
+        }
+        offset += 1 + rows.len();
+    }
+    let row = row.ok_or("herdr kennt diese Machine oder diesen Tab nicht")?;
+    Ok(herdr_follow::Target { row, total_rows: offset, profile, machine_only: pane_id.is_none() })
 }
 
 #[tauri::command]
@@ -674,7 +712,7 @@ pub fn run() {
             Ok(())
         })
         .manage(AppState::default())
-        .invoke_handler(tauri::generate_handler![overview, session_detail, quota, focus_herdr, clear_herdr, stop_herdr, open_folder, open_session, favicon, open_url])
+        .invoke_handler(tauri::generate_handler![overview, session_detail, quota, focus_herdr, follow_in_herdr, clear_herdr, stop_herdr, open_folder, open_session, favicon, open_url])
         .run(tauri::generate_context!())
         .expect("Agent Dashboard konnte nicht starten");
 }

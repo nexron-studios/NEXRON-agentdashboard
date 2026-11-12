@@ -16,6 +16,9 @@ watch(machineId, (id) => localStorage.setItem(MACHINE_KEY, id))
 export const machine = computed(
   () => machines.value.find((m) => m.id === machineId.value) ?? machines.value.find((m) => m.local) ?? null,
 )
+/** Warum herdr dem letzten Umschalten nicht gefolgt ist; leer, wenn alles geklappt hat */
+export const herdrNotice = ref('')
+
 /** Sessions liegen auf einem anderen Rechner: Ordner und Fenster gibt es hier nicht */
 export const isRemote = computed(() => !!machine.value && !machine.value.local)
 

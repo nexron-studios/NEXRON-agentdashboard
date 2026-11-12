@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Wird von Tauri in das Info.plist der App gemischt. macOS zeigt den Text, wenn das Dashboard
+       zum ersten Mal Ghostty steuert (herdr_follow.rs: herdr folgt dem Machine-Umschalter). -->
+  <key>NSAppleEventsUsageDescription</key>
+  <string>Agent Dashboard schaltet herdr in Ghostty auf denselben Rechner wie den Umschalter.</string>
+</dict>
+</plist>

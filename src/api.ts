@@ -213,7 +213,10 @@ export interface Detail {
 
 export const fetchOverview = (recentLimit: number, machine: string) => invoke<Overview>('overview', { recentLimit, machine })
 export const fetchDetail = (sessionId: string, machine: string) => invoke<Detail>('session_detail', { sessionId, machine })
-export const focusHerdr = (place: HerdrPlace) => invoke<void>('focus_herdr', { tabId: place.tabId, machine: place.machine })
+export const focusHerdr = (place: HerdrPlace) =>
+  invoke<void>('focus_herdr', { tabId: place.tabId, paneId: place.paneId, machine: place.machine })
+/** herdr in Ghostty wechselt auf dieselbe Machine wie der Umschalter */
+export const followInHerdr = (machine: string) => invoke<void>('follow_in_herdr', { machine })
 export const clearHerdr = (place: HerdrPlace) => invoke<void>('clear_herdr', { paneId: place.paneId, machine: place.machine })
 export const stopHerdr = (place: HerdrPlace) => invoke<void>('stop_herdr', { paneId: place.paneId, machine: place.machine })
 export const openFolder = (path: string) => invoke<void>('open_folder', { path })

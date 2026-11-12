@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ArrowLeft, CircleAlert, CircleCheck } from 'lucide-vue-next'
-import { fetchOverview, type Overview } from './api'
+import { fetchOverview, followInHerdr, type Overview } from './api'
 import { awaitsYou, isBusy, needsApproval, usePolling } from './format'
-import { machineId, machines, profiles } from './store'
+import { herdrNotice, machineId, machines, profiles } from './store'
 import ClawdLogo from './components/ClawdLogo.vue'
 import NexronLogo from './components/NexronLogo.vue'
 import QuotaMeter from './components/QuotaMeter.vue'
@@ -39,6 +39,9 @@ const selectMachine = (id: string) => {
   selected.value = null
   overview.value = null
   refresh()
+  // herdr in Ghostty zieht mit; klappt das nicht, steht der Grund neben dem Umschalter
+  herdrNotice.value = ''
+  followInHerdr(id).catch((e) => (herdrNotice.value = String(e)))
 }
 
 const counts = computed(() => {

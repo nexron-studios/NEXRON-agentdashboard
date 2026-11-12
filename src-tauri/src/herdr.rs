@@ -92,9 +92,7 @@ fn place(snap: &Value, pane: &Value, machine: Option<&str>) -> HerdrPlace {
 
 /// Ort jeder Claude-Session in einem herdr-Snapshot einer anderen Machine, nach Session-ID. Dort
 /// gibt es keine PIDs zum Abgleichen, aber herdr nennt die Session-ID des Agents selbst.
-pub fn places_by_session(snapshot_json: &str, machine: &str) -> HashMap<String, HerdrPlace> {
-    let Ok(v) = serde_json::from_str::<Value>(snapshot_json) else { return HashMap::new() };
-    let snap = &v["result"]["snapshot"];
+pub fn places_by_session(snap: &Value, machine: &str) -> HashMap<String, HerdrPlace> {
     snap["panes"]
         .as_array()
         .into_iter()
@@ -134,6 +132,29 @@ impl HerdrCache {
         self.pid_by_terminal.retain(|t, _| seen.contains(t));
         out
     }
+}
+
+/// Zeilen des herdr-Navigators (`prefix+g`) für einen Server, ohne die Machine-Zeile darüber: je
+/// Workspace eine Zeile (`None`), darunter seine Panes in Tab-Reihenfolge. Bildet `navigator_rows`
+/// aus herdr 0.9.3 nach (src/client/shell/aggregate_navigation.rs), solange nichts gefiltert ist.
+pub fn navigator_rows(snap: &Value) -> Vec<Option<String>> {
+    let list = |key: &str| snap[key].as_array().cloned().unwrap_or_default();
+    let (workspaces, tabs, panes) = (list("workspaces"), list("tabs"), list("panes"));
+    let mut rows = Vec::new();
+    for ws in &workspaces {
+        rows.push(None);
+        for tab in tabs.iter().filter(|t| t["workspace_id"] == ws["workspace_id"]) {
+            for pane in panes.iter().filter(|p| p["tab_id"] == tab["tab_id"]) {
+                rows.push(pane["pane_id"].as_str().map(str::to_string));
+            }
+        }
+    }
+    rows
+}
+
+/// Navigator-Zeilen des herdr-Servers auf diesem Rechner; `None`, wenn herdr nicht läuft
+pub fn local_navigator_rows() -> Option<Vec<Option<String>>> {
+    call(&["api", "snapshot"]).map(|v| navigator_rows(&v["snapshot"]))
 }
 
 fn pane_pid(pane_id: &str) -> Option<u32> {

@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { ChevronDown, CircleCheck, History, Radio, Search, TriangleAlert, Unplug, UserRound } from 'lucide-vue-next'
 import type { Overview, SessionRow } from '../api'
 import { awaitsYou, byTab, dayLabel, headline, projectName, time } from '../format'
-import { accountInfo, isRemote, machine, machines } from '../store'
+import { accountInfo, herdrNotice, isRemote, machine, machines } from '../store'
 import FinishedStrip from './FinishedStrip.vue'
 import MachineSwitch from './MachineSwitch.vue'
 import SessionCard from './SessionCard.vue'
@@ -69,6 +69,9 @@ const groups = computed(() => {
           <span v-if="!hasMachines" class="num rounded-full bg-surface-2 px-2.5 text-[14px] font-medium text-ink-2">{{ live.length }}</span>
         </h2>
         <MachineSwitch v-if="hasMachines" @select="emit('machine', $event)" />
+        <span v-if="herdrNotice" class="flex items-center gap-1.5 text-[13px] text-ink-2" :title="herdrNotice">
+          <TriangleAlert :size="14" class="shrink-0 text-critical" /> herdr ist nicht mitgewechselt
+        </span>
         <span v-if="live.length" class="ml-auto flex items-center gap-1.5 text-[12px] font-semibold tracking-wide text-ink-3 uppercase">
           <CircleCheck :size="14" :stroke-width="2.25" class="text-good" /> Fertig · neueste zuerst
         </span>

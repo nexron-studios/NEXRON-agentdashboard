@@ -5,8 +5,9 @@ import { machine, machines } from '../store'
 import RingSpinner from './RingSpinner.vue'
 
 // Umschalter zwischen diesem Rechner und den SSH-Machines aus herdr. Die Kopfzeile zählt nur den
-// gezeigten Rechner; damit auf dem verdeckten nichts untergeht, trägt sein Segment dessen
-// wichtigsten Zustand mit demselben Icon wie die Kopfzeile: Freigabe vor fertig vor arbeitet.
+// gezeigten Rechner; damit auf dem verdeckten nichts untergeht, trägt jedes Segment den wichtigsten
+// Zustand seines Rechners mit demselben Icon wie die Kopfzeile: Freigabe vor fertig vor arbeitet.
+// Auch das gewählte, damit beim Umschalten kein Segment seine Breite ändert und nichts springt.
 const emit = defineEmits<{ select: [id: string] }>()
 
 const OS_ICONS: Record<string, typeof Laptop> = { macos: Laptop, windows: Monitor, linux: Server }
@@ -43,8 +44,7 @@ const hint = (m: MachineSummary, i: number) => {
       <span v-else-if="!m.connected" class="text-[12px] font-normal text-ink-3">offline</span>
       <span v-else class="num rounded-full bg-surface-2 px-2 text-[13px] text-ink-2">{{ m.live }}</span>
 
-      <!-- Nur auf dem verdeckten Rechner; den gezeigten zählt die Kopfzeile -->
-      <template v-if="m.id !== machine?.id && m.connected">
+      <template v-if="m.connected">
         <span v-if="m.approval" class="num flex items-center gap-1 text-[13px] text-ink">
           <CircleAlert :size="14" :stroke-width="2.25" class="wiggle text-critical" />{{ m.approval }}
         </span>

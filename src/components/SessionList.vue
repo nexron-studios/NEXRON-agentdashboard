@@ -7,6 +7,7 @@ import { accountInfo, isRemote, machine, machines } from '../store'
 import FinishedStrip from './FinishedStrip.vue'
 import MachineSwitch from './MachineSwitch.vue'
 import SessionCard from './SessionCard.vue'
+import SessionsSkeleton from './SessionsSkeleton.vue'
 
 const props = defineProps<{ overview: Overview | null; error: string; now: number }>()
 const emit = defineEmits<{ select: [id: string]; machine: [id: string] }>()
@@ -14,6 +15,9 @@ const emit = defineEmits<{ select: [id: string]; machine: [id: string] }>()
 const hasMachines = computed(() => machines.value.length > 1)
 // Ein anderer Rechner, der (noch) nicht antwortet: Platzhalter beim Verbinden, sonst der Grund
 const offline = computed(() => (isRemote.value && machine.value && !machine.value.connected ? machine.value : null))
+const loading = computed(() => (!props.overview && !props.error) || !!offline.value?.connecting)
+// Der Umschalter kennt die Zahl schon, bevor die Karten da sind; ohne Verbindung die übliche volle Seite
+const skeletonCount = computed(() => (machine.value?.connected ? Math.max(1, machine.value.live) : COLLAPSED))
 
 const COLLAPSED = 6
 
@@ -70,9 +74,7 @@ const groups = computed(() => {
         </span>
       </div>
 
-      <div v-if="(!overview && !error) || offline?.connecting" class="grid gap-4 min-[760px]:grid-cols-2 min-[1150px]:grid-cols-3">
-        <div v-for="i in 2" :key="i" class="card h-64 animate-pulse" />
-      </div>
+      <SessionsSkeleton v-if="loading" :count="skeletonCount" />
       <div v-else-if="offline" class="card flex flex-col items-center gap-3 px-6 py-12 text-center">
         <span class="flex h-12 w-12 items-center justify-center rounded-xl border border-line bg-surface-2">
           <Unplug :size="22" :stroke-width="1.75" class="text-ink-3" />
@@ -106,7 +108,7 @@ const groups = computed(() => {
       </div>
     </section>
 
-    <section v-if="overview" class="mt-6">
+    <section v-if="overview || loading" class="mt-6">
       <div class="mb-4 flex flex-wrap items-center gap-3">
         <h2 class="flex items-center gap-2.5 text-[20px] font-semibold tracking-tight">
           <History :size="20" :stroke-width="2" class="history-rewind text-ink-2" /> Zuletzt
@@ -124,7 +126,15 @@ const groups = computed(() => {
         </label>
       </div>
 
-      <div class="card overflow-hidden">
+      <div v-if="!overview" class="card overflow-hidden" aria-busy="true">
+        <div class="h-[33px] border-b border-line bg-surface-2/60" />
+        <div v-for="i in COLLAPSED" :key="i" class="flex h-[61px] items-center gap-4 border-b border-line px-5 last:border-b-0">
+          <span class="h-3 w-12 animate-pulse rounded bg-surface-2" />
+          <span class="h-3 flex-1 animate-pulse rounded bg-surface-2" />
+        </div>
+        <div class="h-[46px] border-t border-line" />
+      </div>
+      <div v-else class="card overflow-hidden">
         <p v-if="!filtered.length" class="px-5 py-8 text-center text-ink-3">Keine Session passt zu „{{ query }}“.</p>
         <template v-for="g in groups" :key="g.day">
           <div class="border-b border-line bg-surface-2/60 px-5 py-2 text-[12px] font-semibold tracking-wide text-ink-3 uppercase">

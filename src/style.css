@@ -19,6 +19,9 @@
  * surface mindestens 4,5:1 Kontrast.
  */
 @theme {
+  /* Volle Header-Breite mit zwei Kontingent-Konten und Uhr. Schmaler blendet der Header
+     Zähler-Beschriftungen und Countdowns aus, statt rechts abgeschnitten zu werden. */
+  --container-header: 92.5rem;
   --color-app: #0e0e0f;
   --color-surface: #19191a;
   --color-surface-2: #222223;

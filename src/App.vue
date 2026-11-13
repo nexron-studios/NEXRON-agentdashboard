@@ -72,7 +72,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 <template>
   <div class="flex h-full flex-col">
-    <header class="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-4 border-b border-line bg-app/85 px-8 backdrop-blur">
+    <header class="@container sticky top-0 z-10 flex h-16 shrink-0 items-center gap-4 border-b border-line bg-app/85 px-8 backdrop-blur">
       <button
         v-if="selected"
         class="press -ml-2 flex items-center gap-2 rounded-lg px-2 py-1.5 text-[14px] font-medium text-ink-2 hover:bg-surface-2 hover:text-ink"
@@ -98,11 +98,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           title="Sessions, die auf eine Freigabe oder Auswahl warten"
         >
           <CircleAlert :size="15" :stroke-width="2.25" :class="counts.approval ? 'wiggle text-critical' : ''" />
-          <b class="num">{{ counts.approval }}</b> Freigabe
+          <b class="num">{{ counts.approval }}</b> <span class="@max-header:sr-only">Freigabe</span>
         </span>
-        <span class="flex items-center gap-1.5 rounded-full border border-line px-3 py-1 text-ink-2">
+        <span class="flex items-center gap-1.5 rounded-full border border-line px-3 py-1 text-ink-2" title="Sessions, die gerade arbeiten">
           <RingSpinner :size="15" class="text-warning" :spinning="!!counts.busy" />
-          <b class="num text-ink">{{ counts.busy }}</b> arbeiten
+          <b class="num text-ink">{{ counts.busy }}</b> <span class="@max-header:sr-only">arbeiten</span>
         </span>
         <span
           class="flex items-center gap-1.5 rounded-full border px-3 py-1"
@@ -110,14 +110,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           title="Sessions, die ihre Aufgabe abgeschlossen haben"
         >
           <CircleCheck :size="15" :stroke-width="2.25" class="text-good" :class="{ beat: counts.waiting }" />
-          <b class="num">{{ counts.waiting }}</b> abgeschlossen
+          <b class="num">{{ counts.waiting }}</b> <span class="@max-header:sr-only">abgeschlossen</span>
         </span>
         <span
           class="ml-2 flex items-center gap-2 text-[12px] text-ink-3"
           :title="`Aktualisiert alle 2 Sekunden. Profile: ${profiles.map((p) => p.label).join(', ')}${overview?.herdrAvailable ? ' · herdr verbunden' : ''}`"
         >
           <span class="relative h-2 w-2 rounded-full" :class="error ? 'bg-critical' : 'bg-good live-ping'" />
-          {{ error ? 'Fehler' : 'Live' }}
+          <span class="@max-header:sr-only">{{ error ? 'Fehler' : 'Live' }}</span>
         </span>
       </div>
     </header>

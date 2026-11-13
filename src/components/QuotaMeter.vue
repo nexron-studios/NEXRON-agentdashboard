@@ -43,7 +43,7 @@ const tooltip = (a: AccountQuota) =>
   <div
     v-for="a in accounts"
     :key="a.label"
-    class="grid grid-cols-[repeat(4,auto)] items-center gap-x-2 gap-y-1 whitespace-nowrap text-[11px]"
+    class="grid grid-cols-[repeat(4,auto)] @max-header:grid-cols-[repeat(3,auto)] items-center gap-x-2 gap-y-1 whitespace-nowrap text-[11px]"
     :class="{ 'opacity-60': a.error }"
     :title="tooltip(a)"
   >
@@ -52,8 +52,8 @@ const tooltip = (a: AccountQuota) =>
       <span class="h-1.5 w-24 overflow-hidden rounded-full bg-surface-3">
         <span class="block h-full rounded-full" :class="barColor(w)" :style="{ width: `${freePercent(w)}%` }" />
       </span>
-      <b class="num text-right text-ink">{{ freePercent(w) }} % frei</b>
-      <span class="num text-ink-3">{{ countdown(w) }}</span>
+      <b class="num text-right text-ink" :title="countdown(w) && `wieder voll in ${countdown(w)}`">{{ freePercent(w) }} % frei</b>
+      <span class="num text-ink-3 @max-header:hidden">{{ countdown(w) }}</span>
     </template>
   </div>
 </template>

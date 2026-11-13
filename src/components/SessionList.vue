@@ -7,6 +7,7 @@ import { accountInfo, herdrNotice, isRemote, machine, machines } from '../store'
 import FinishedStrip from './FinishedStrip.vue'
 import MachineSwitch from './MachineSwitch.vue'
 import SessionCard from './SessionCard.vue'
+import SessionCardGhost from './SessionCardGhost.vue'
 import SessionsSkeleton from './SessionsSkeleton.vue'
 
 const props = defineProps<{ overview: Overview | null; error: string; now: number }>()
@@ -106,6 +107,13 @@ const groups = computed(() => {
             :now="now"
             :rank="rank.get(s.sessionId)"
             @open="emit('select', s.sessionId)"
+          />
+          <!-- Freie Plätze der letzten Reihe füllen, je Spaltenzahl (2 bzw. 3) nur so viele wie fehlen -->
+          <SessionCardGhost
+            v-for="i in 2"
+            :key="`ghost-${i}`"
+            class="hidden"
+            :class="[i <= live.length % 2 && '@min-[640px]:flex', i <= (3 - (live.length % 3)) % 3 ? '@min-[980px]:flex' : '@min-[980px]:hidden']"
           />
         </div>
       </div>

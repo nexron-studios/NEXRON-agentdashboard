@@ -259,6 +259,10 @@ pub fn recent_transcripts(profiles: &[Profile], limit: usize) -> Vec<RecentTrans
         })
         .collect();
     all.sort_by(|a, b| b.modified.cmp(&a.modified));
+    // `claude-takealong` kopiert ein Transkript in ein anderes Profil; dieselbe Session liegt dann
+    // zweimal auf der Platte. Es zählt die zuletzt geschriebene Kopie.
+    let mut seen = std::collections::HashSet::new();
+    all.retain(|r| seen.insert(r.session_id.clone()));
     all.truncate(limit);
     all
 }

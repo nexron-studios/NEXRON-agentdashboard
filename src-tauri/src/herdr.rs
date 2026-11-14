@@ -175,11 +175,14 @@ pub fn focus_tab(remote: Option<&Remote>, tab_id: &str) -> Result<(), String> {
 /// einmal frisch abgefragt, denn die Karte kann bis zu 2 s alt sein: Während Claude arbeitet, würde der
 /// Befehl eingereiht und den Verlauf mitten in der Aufgabe löschen. Eine offene Freigabe-Frage weist
 /// `agent prompt` selbst ab, bevor es etwas sendet.
-pub fn clear_chat(remote: Option<&Remote>, pane_id: &str) -> Result<(), String> {
+pub fn clear_chat(remote: Option<&Remote>, pane_id: &str, session_id: &str) -> Result<(), String> {
     let info = call_on(remote, &["agent", "get", pane_id]).ok_or("herdr findet diesen Chat nicht mehr. Läuft herdr?")?;
     let agent = &info["agent"];
     if agent["agent"] != "claude" {
         return Err("In diesem herdr-Tab läuft kein Claude mehr.".into());
+    }
+    if agent["agent_session"]["value"].as_str().is_some_and(|id| id != session_id) {
+        return Err("In diesem herdr-Tab läuft inzwischen eine andere Session.".into());
     }
     if !matches!(agent["agent_status"].as_str(), Some("idle" | "done")) {
         return Err("Claude arbeitet gerade oder wartet auf eine Freigabe. Löschen geht erst, wenn er fertig ist.".into());

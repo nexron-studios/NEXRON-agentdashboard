@@ -102,7 +102,7 @@ const errors = computed(() => [...(s.value?.errors ?? [])].reverse().slice(0, 40
 </script>
 
 <template>
-  <div class="mx-auto max-w-[1680px] px-8 pt-8 pb-12">
+  <div class="mx-auto max-w-[1920px] px-8 pt-8 pb-12">
     <p v-if="error" class="flex items-center gap-2 rounded-xl border border-critical/40 bg-critical/10 px-4 py-3">
       <TriangleAlert :size="18" class="shrink-0 text-critical" /> {{ error }}
     </p>
@@ -123,7 +123,7 @@ const errors = computed(() => [...(s.value?.errors ?? [])].reverse().slice(0, 40
             :cwd="detail.live.cwd ?? s.cwd"
             :entrypoint="detail.live.entrypoint ?? ''"
           />
-          <SessionClear v-if="detail.live && detail.herdr" :herdr="detail.herdr" :status="status" @cleared="emit('back')" />
+          <SessionClear v-if="detail.live && detail.herdr" :herdr="detail.herdr" :session-id="sessionId" :status="status" @cleared="emit('back')" />
         </div>
         <h1 class="mt-3 text-[28px] leading-tight font-semibold tracking-tight" :class="{ 'text-ink-3': head?.pending }">
           {{ head?.pending ? PENDING_TITLE : head?.text || sessionId.slice(0, 8) }}

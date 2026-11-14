@@ -214,7 +214,10 @@ impl Remote {
         let quoted: Vec<String> = args.iter().map(|a| format!("'{a}'")).collect();
         run_ps(
             &self.target,
-            &format!("$null | & (Join-Path $env:USERPROFILE '.herdr\\packages\\standalone\\current\\herdr.exe') {}", quoted.join(" ")),
+            &format!(
+                "$h = Join-Path $env:USERPROFILE '.herdr\\packages\\standalone\\current\\herdr.exe'; if (-not (Test-Path $h)) {{ $h = (Get-Command herdr.exe).Source }}; $null | & $h {}",
+                quoted.join(" ")
+            ),
         )
     }
 
@@ -387,8 +390,21 @@ impl Remote {
     }
 }
 
+/// Windows: fest das System-OpenSSH. Aus Git Bash gestartet stünde Gits MSYS-`ssh.exe` vorn im PATH,
+/// und das zerlegt die lange `-EncodedCommand`-Zeile (PowerShell: „schließende } fehlt“).
+fn ssh_binary() -> PathBuf {
+    #[cfg(windows)]
+    if let Some(root) = std::env::var_os("SystemRoot") {
+        let system = PathBuf::from(root).join("System32\\OpenSSH\\ssh.exe");
+        if system.is_file() {
+            return system;
+        }
+    }
+    PathBuf::from("ssh")
+}
+
 fn ssh(target: &str) -> Command {
-    let mut cmd = Command::new("ssh");
+    let mut cmd = Command::new(ssh_binary());
     cmd.args(["-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "-o", "ServerAliveInterval=10", "-o", "ServerAliveCountMax=3"]);
     // Eine geteilte Verbindung macht Klicks wie „Zum Chat“ schnell; Windows-OpenSSH kann das nicht.
     #[cfg(not(windows))]

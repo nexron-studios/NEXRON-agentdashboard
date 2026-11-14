@@ -10,7 +10,7 @@ import AlertDialogContent from './ui/alert-dialog/AlertDialogContent.vue'
 // VS Code lässt sich nicht zuverlässig schreiben. Und nur, solange Claude auf dich wartet: während einer
 // Aufgabe würde der Verlauf mittendrin gelöscht. Der Button bleibt dann sichtbar, aber gesperrt
 // (`aria-disabled` statt `disabled`, damit der Tooltip erklärt, warum).
-const props = defineProps<{ herdr: HerdrPlace; status: string }>()
+const props = defineProps<{ herdr: HerdrPlace; sessionId: string; status: string }>()
 const emit = defineEmits<{ cleared: [] }>()
 const open = ref(false)
 const failed = ref('')
@@ -30,7 +30,7 @@ function setOpen(value: boolean) {
 
 async function clear() {
   try {
-    await clearHerdr(props.herdr)
+    await clearHerdr(props.herdr, props.sessionId)
     failed.value = ''
     emit('cleared')
   } catch (e) {

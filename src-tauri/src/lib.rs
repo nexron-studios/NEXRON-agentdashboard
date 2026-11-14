@@ -582,8 +582,8 @@ fn navigator_target(state: &AppState, machine: Option<&str>, pane_id: Option<&st
 }
 
 #[tauri::command]
-async fn clear_herdr(pane_id: String, machine: Option<String>, state: tauri::State<'_, AppState>) -> Result<(), String> {
-    herdr::clear_chat(state.remote(machine.as_deref()).as_deref(), &pane_id)
+async fn clear_herdr(pane_id: String, session_id: String, machine: Option<String>, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    herdr::clear_chat(state.remote(machine.as_deref()).as_deref(), &pane_id, &session_id)
 }
 
 #[tauri::command]
@@ -665,12 +665,30 @@ async fn open_session(pid: Option<u32>, cwd: String, entrypoint: String) -> Resu
 const DESIGN_WIDTH: f64 = 1200.0;
 /// Darunter wird die Schrift zu klein zum Lesen; dann bricht das Raster lieber um.
 const MIN_ZOOM: f64 = 0.7;
+/// Bezugsbildschirm in logischen px: Größere Monitore zeigen dieselbe Aufteilung, nur entsprechend größer.
+/// Mehr Spalten wären auf 4K zwar möglich, aber dann blieben die Karten so klein wie auf Full HD.
+const REFERENCE_SCREEN: (f64, f64) = (1920.0, 1080.0);
 
-fn zoom_to_width(win: &tauri::WebviewWindow, physical_width: u32) {
-    let Ok(scale) = win.scale_factor() else { return };
-    let zoom = (physical_width as f64 / scale / DESIGN_WIDTH).clamp(MIN_ZOOM, 1.0);
+/// Über die knappere Seite, damit ein Ultrawide nicht höher zoomt, als seine Höhe hergibt.
+fn display_factor(logical_w: f64, logical_h: f64) -> f64 {
+    (logical_w / REFERENCE_SCREEN.0).min(logical_h / REFERENCE_SCREEN.1).max(1.0)
+}
+
+fn monitor_factor(monitor: &tauri::Monitor) -> f64 {
+    let size = monitor.size().to_logical::<f64>(monitor.scale_factor());
+    display_factor(size.width, size.height)
+}
+
+fn zoom_for(logical_window_w: f64, display: f64) -> f64 {
+    let fit = (logical_window_w / display / DESIGN_WIDTH).clamp(MIN_ZOOM, 1.0);
+    (fit * display * 100.0).round() / 100.0
+}
+
+fn zoom_to_window(win: &tauri::WebviewWindow) {
+    let (Ok(size), Ok(scale)) = (win.inner_size(), win.scale_factor()) else { return };
+    let display = win.current_monitor().ok().flatten().map_or(1.0, |m| monitor_factor(&m));
     // Schlägt das fehl, bleibt die Oberfläche nur unskaliert; das Dashboard funktioniert weiter.
-    let _ = win.set_zoom((zoom * 100.0).round() / 100.0);
+    let _ = win.set_zoom(zoom_for(size.width as f64 / scale, display));
 }
 
 /// Startgröße kompakt für den Platz neben dem Terminal: so groß, dass bei herausgezoomter
@@ -684,12 +702,13 @@ fn fit_to_monitor(win: &tauri::WebviewWindow) {
     let monitor = win.current_monitor().ok().flatten().or_else(|| win.primary_monitor().ok().flatten());
     if let (Some(m), Ok(outer), Ok(inner)) = (monitor, win.outer_size(), win.inner_size()) {
         let scale = m.scale_factor();
+        let display = monitor_factor(&m);
         let area = m.work_area();
         // Rahmen und Titelleiste gehören zur Außengröße, set_size setzt die Innengröße
         let frame_w = outer.width.saturating_sub(inner.width) as f64;
         let frame_h = outer.height.saturating_sub(inner.height) as f64;
-        let w = (MAX_W * scale + frame_w).min(area.size.width as f64 - 2.0 * MARGIN * scale);
-        let h = (MAX_H * scale + frame_h).min(area.size.height as f64 - 2.0 * MARGIN * scale);
+        let w = (MAX_W * display * scale + frame_w).min(area.size.width as f64 - 2.0 * MARGIN * scale);
+        let h = (MAX_H * display * scale + frame_h).min(area.size.height as f64 - 2.0 * MARGIN * scale);
         let x = area.position.x as f64 + (area.size.width as f64 - w) / 2.0;
         let y = area.position.y as f64 + (area.size.height as f64 - h) / 2.0;
         let _ = win.set_size(tauri::PhysicalSize::new((w - frame_w).round() as u32, (h - frame_h).round() as u32));
@@ -731,13 +750,12 @@ pub fn run() {
             }
             if let Some(win) = app.get_webview_window("main") {
                 fit_to_monitor(&win);
-                if let Ok(size) = win.inner_size() {
-                    zoom_to_width(&win, size.width);
-                }
+                zoom_to_window(&win);
                 let zoomed = win.clone();
+                // Moved: Beim Ziehen auf einen anderen Monitor ändert sich der Faktor ohne Resize.
                 win.on_window_event(move |event| {
-                    if let tauri::WindowEvent::Resized(size) = event {
-                        zoom_to_width(&zoomed, size.width);
+                    if matches!(event, tauri::WindowEvent::Resized(_) | tauri::WindowEvent::Moved(_)) {
+                        zoom_to_window(&zoomed);
                     }
                 });
             }
@@ -747,4 +765,38 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![overview, session_detail, quota, focus_herdr, follow_in_herdr, clear_herdr, stop_herdr, open_folder, open_session, favicon, open_url])
         .run(tauri::generate_context!())
         .expect("Agent Dashboard konnte nicht starten");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn display_factor_grows_only_above_full_hd() {
+        assert_eq!(display_factor(1920.0, 1080.0), 1.0);
+        assert_eq!(display_factor(1024.0, 600.0), 1.0);
+        assert_eq!(display_factor(3840.0, 2160.0), 2.0);
+    }
+
+    #[test]
+    fn display_factor_uses_the_tighter_side_on_ultrawide() {
+        assert_eq!(display_factor(3440.0, 1440.0), 1440.0 / 1080.0);
+    }
+
+    #[test]
+    fn full_hd_keeps_its_existing_zoom() {
+        assert_eq!(zoom_for(1920.0, 1.0), 1.0);
+        assert_eq!(zoom_for(1200.0, 1.0), 1.0);
+        assert_eq!(zoom_for(960.0, 1.0), 0.8);
+        assert_eq!(zoom_for(400.0, 1.0), 0.7);
+    }
+
+    #[test]
+    fn four_k_scales_the_full_hd_layout_up() {
+        let at_150_percent = display_factor(2560.0, 1440.0);
+        assert_eq!(zoom_for(2560.0, at_150_percent), 1.33);
+        assert_eq!(zoom_for(1280.0, at_150_percent), 1.07);
+        assert_eq!(zoom_for(3840.0, 2.0), 2.0);
+        assert_eq!(zoom_for(1920.0, 2.0), 1.6);
+    }
 }

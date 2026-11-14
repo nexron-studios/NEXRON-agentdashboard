@@ -217,7 +217,8 @@ export const focusHerdr = (place: HerdrPlace) =>
   invoke<void>('focus_herdr', { tabId: place.tabId, paneId: place.paneId, machine: place.machine })
 /** herdr in Ghostty wechselt auf dieselbe Machine wie der Umschalter */
 export const followInHerdr = (machine: string) => invoke<void>('follow_in_herdr', { machine })
-export const clearHerdr = (place: HerdrPlace) => invoke<void>('clear_herdr', { paneId: place.paneId, machine: place.machine })
+export const clearHerdr = (place: HerdrPlace, sessionId: string) =>
+  invoke<void>('clear_herdr', { paneId: place.paneId, sessionId, machine: place.machine })
 export const stopHerdr = (place: HerdrPlace) => invoke<void>('stop_herdr', { paneId: place.paneId, machine: place.machine })
 export const openFolder = (path: string) => invoke<void>('open_folder', { path })
 export const openSession = (pid: number | null, cwd: string, entrypoint: string) =>

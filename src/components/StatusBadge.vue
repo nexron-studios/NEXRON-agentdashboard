@@ -1,17 +1,19 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Circle, CircleAlert, CircleCheck, CircleStop } from 'lucide-vue-next'
+import { Circle, CircleAlert, CircleCheck, CircleStop, Hourglass } from 'lucide-vue-next'
 import RingSpinner from './RingSpinner.vue'
 import TerminalLoader from './TerminalLoader.vue'
 
-/** `fresh`: Session ohne eigene Anfrage. „idle“ heißt dann „bereit“, nicht „wartet auf dich“. */
-const props = defineProps<{ status: string; fresh?: boolean; size?: 'sm' | 'md' }>()
+/** `fresh`: Session ohne eigene Anfrage. „idle“ heißt dann „bereit“, nicht „wartet auf dich“.
+ *  `note`: Claudes Meldung, warum die Session steht (Nutzungslimit), als Tooltip. */
+const props = defineProps<{ status: string; fresh?: boolean; size?: 'sm' | 'md'; note?: string }>()
 
 const STATES = {
   blocked: { label: 'Braucht Freigabe', icon: CircleAlert, text: 'text-critical', bg: 'bg-critical/12 border-critical/40' },
   busy: { label: 'Arbeitet', icon: RingSpinner, text: 'text-warning', bg: 'bg-warning/10 border-warning/30' },
   shell: { label: 'Führt Befehl aus', icon: TerminalLoader, text: 'text-warning', bg: 'bg-warning/10 border-warning/30' },
   waiting: { label: 'Aufgabe abgeschlossen', icon: CircleCheck, text: 'text-good', bg: 'bg-good/12 border-good/35' },
+  limit: { label: 'Limit erreicht', icon: Hourglass, text: 'text-ink-2', bg: 'bg-surface-2 border-line-strong' },
   ready: { label: 'Bereit', icon: Circle, text: 'text-ink-2', bg: 'bg-surface-2 border-line-strong' },
   ended: { label: 'Beendet', icon: CircleStop, text: 'text-ink-3', bg: 'bg-surface-2 border-line' },
 } as const
@@ -22,6 +24,7 @@ const state = computed(() => {
   if (s === 'busy') return STATES.busy
   if (s === 'shell') return STATES.shell
   if (s === 'idle' || s === 'done') return props.fresh ? STATES.ready : STATES.waiting
+  if (s === 'limit') return STATES.limit
   if (s === 'ended') return STATES.ended
   return { ...STATES.ready, label: s }
 })
@@ -31,6 +34,7 @@ const state = computed(() => {
   <span
     class="inline-flex shrink-0 items-center gap-1.5 rounded-full border font-semibold whitespace-nowrap"
     :class="[state.bg, state.text, size === 'sm' ? 'px-2 py-0.5 text-[12px]' : 'px-2.5 py-1 text-[13px]']"
+    :title="note || undefined"
   >
     <!-- Neuer Status: Icon ploppt einmal auf, damit der Wechsel auffällt -->
     <span :key="state.label" class="pop-in relative inline-flex" :class="{ attention: state === STATES.blocked }">

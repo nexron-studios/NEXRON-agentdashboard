@@ -27,6 +27,8 @@ export interface SessionRow {
   sessionId: string
   live: boolean
   status: string
+  /** Warum die Session steht (Meldung zum Nutzungslimit), sonst leer */
+  note: string
   name: string
   pid: number | null
   entrypoint: string
@@ -194,6 +196,8 @@ export interface LiveSession {
   cwd: string | null
   name: string | null
   status: string | null
+  /** Warum die Session steht (Nutzungslimit) */
+  note?: string | null
   statusUpdatedAt: number | null
   entrypoint: string | null
   account: string

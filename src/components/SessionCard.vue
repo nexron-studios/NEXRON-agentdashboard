@@ -76,8 +76,9 @@ const tool = computed(() => toolKind(action.value.tool))
   >
     <div class="flex items-center gap-3">
       <div class="flex min-w-0 flex-1 items-center gap-2.5 text-[14px]">
+        <!-- Der Name schrumpft zuletzt: erst wird der Account gekürzt, dann der Name, nie läuft er unter den Status -->
         <span
-          class="flex min-w-0 shrink-0 items-center gap-1.5"
+          class="flex min-w-0 items-center gap-1.5"
           :title="s.herdr ? `herdr: Workspace „${s.herdr.workspace}“, Tab „${s.herdr.tab}“` : 'Name aus der Claude-Session (nicht in herdr gefunden)'"
         >
           <component :is="s.herdr ? LayoutPanelTop : SquareTerminal" :size="15" :stroke-width="2" class="shrink-0 text-ink-3" />
@@ -86,14 +87,14 @@ const tool = computed(() => toolKind(action.value.tool))
             <span class="font-semibold text-ink">{{ s.herdr?.tab || s.name || 'Session' }}</span>
           </span>
         </span>
-        <span v-if="s.account" class="flex min-w-0 items-center gap-1 text-[13px] text-ink-3" :title="acc.email ? `Claude-Account: ${acc.email}` : 'Claude-Profil'">
+        <span v-if="s.account" class="flex min-w-0 shrink-[100] items-center gap-1 text-[13px] text-ink-3" :title="acc.email ? `Claude-Account: ${acc.email}` : 'Claude-Profil'">
           <UserRound :size="13" :stroke-width="2" class="shrink-0" :style="{ color: acc.color }" /> <span class="truncate">{{ s.account }}</span>
         </span>
         <span v-if="s.entrypoint === 'claude-vscode'" class="flex min-w-0 items-center gap-1 text-[13px] text-ink-3" title="Läuft in VS Code">
           <Code :size="13" :stroke-width="2" class="shrink-0" /> <span class="truncate">VS Code</span>
         </span>
       </div>
-      <StatusBadge :status="s.status" :fresh="fresh" size="sm" />
+      <StatusBadge :status="s.status" :fresh="fresh" :note="s.note" size="sm" />
     </div>
 
     <!-- Jeder Textbereich hat eine feste Zeilenzahl: Ändert sich der Text, bleibt die Karte gleich hoch. -->

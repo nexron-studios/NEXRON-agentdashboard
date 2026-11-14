@@ -52,6 +52,8 @@ struct SessionRow {
     live: bool,
     /// busy | idle | blocked | … aus `sessions/<pid>.json`; bei beendeten Sessions "ended"
     status: String,
+    /// Warum die Session steht (Meldung zum Nutzungslimit), sonst leer
+    note: String,
     name: String,
     pid: Option<u32>,
     entrypoint: String,
@@ -265,6 +267,7 @@ fn row(stats: &Stats, session_id: String, account: String, live: Option<&LiveSes
     SessionRow {
         live: live.is_some(),
         status: status(live, herdr.as_ref()),
+        note: live.and_then(|l| l.note.clone()).unwrap_or_default(),
         name: live.and_then(|l| l.name.clone()).unwrap_or_default(),
         pid: live.map(|l| l.pid),
         entrypoint: live.and_then(|l| l.entrypoint.clone()).unwrap_or_default(),

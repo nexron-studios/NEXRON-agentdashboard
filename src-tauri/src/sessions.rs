@@ -36,6 +36,12 @@ pub struct LiveSession {
     /// Startzeit des Prozesses (Windows-FILETIME), damit eine wiederverwendete PID nicht als laufend gilt
     #[serde(skip_serializing)]
     pub proc_start: Option<String>,
+    /// Nur bei Hintergrund-Jobs: Ordnername unter `jobs/`
+    #[serde(skip_serializing)]
+    pub job_id: Option<String>,
+    /// Warum die Session steht, z. B. Claudes Meldung zum Nutzungslimit
+    #[serde(default)]
+    pub note: Option<String>,
     #[serde(skip_deserializing)]
     pub account: String,
     #[serde(skip)]
@@ -108,10 +114,32 @@ pub fn live_sessions(profiles: &[Profile]) -> Vec<LiveSession> {
             }
             s.account = p.label.clone();
             s.profile_dir = p.dir.clone();
+            if s.kind.as_deref() == Some("bg") {
+                background_job(&mut s, &p.dir);
+            }
             out.push(s);
         }
     }
+    // Wird eine Session in einem zweiten Terminal fortgesetzt, laufen zwei Prozesse auf demselben
+    // Transkript. Eine Karte reicht; die zuletzt gestartete ist die, mit der gerade gearbeitet wird.
+    out.sort_by_key(|s| std::cmp::Reverse(s.started_at.unwrap_or(0)));
+    let mut seen = std::collections::HashSet::new();
+    out.retain(|s| seen.insert(s.session_id.clone()));
     out
+}
+
+/// Hintergrund-Job (`kind: "bg"`): So legt Claude Code eine Session ab, die ins Nutzungslimit gelaufen
+/// ist. Die Session-Datei bleibt dann auf ihrem letzten Status stehen (oft „shell“), den echten Stand
+/// hat nur `jobs/<id>/state.json`. Der Name ist Claudes Titel; er stünde sonst doppelt auf der Karte.
+fn background_job(s: &mut LiveSession, profile_dir: &Path) {
+    s.name = Some("Hintergrund".into());
+    let id = s.job_id.clone().unwrap_or_else(|| s.session_id.chars().take(8).collect());
+    let Ok(text) = std::fs::read_to_string(profile_dir.join("jobs").join(id).join("state.json")) else { return };
+    let Ok(job) = serde_json::from_str::<Value>(&text) else { return };
+    if job["tempo"] == "blocked" || job["state"] == "blocked" {
+        s.status = Some("limit".into());
+        s.note = job["detail"].as_str().map(str::to_string);
+    }
 }
 
 #[cfg(windows)]
@@ -281,5 +309,36 @@ mod tests {
         for s in live_sessions(&profiles()) {
             println!("{} {} {:?} {:?}", s.account, s.pid, s.name, s.status);
         }
+    }
+}
+
+#[cfg(test)]
+mod job_tests {
+    use super::*;
+
+    fn bg_session(id: &str) -> LiveSession {
+        serde_json::from_value(serde_json::json!({
+            "sessionId": format!("{id}-0000-0000"), "pid": 1, "kind": "bg", "jobId": id,
+            "name": "Forge auf server.nexron einrichten", "status": "shell",
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn background_job_at_limit_reports_limit() {
+        let dir = std::env::temp_dir().join(format!("agentdashboard-test-{}", std::process::id()));
+        let job = dir.join("jobs").join("89a2c8a4");
+        std::fs::create_dir_all(&job).unwrap();
+        std::fs::write(job.join("state.json"), r#"{"state":"working","tempo":"blocked","detail":"You've hit your limit"}"#).unwrap();
+
+        let mut s = bg_session("89a2c8a4");
+        background_job(&mut s, &dir);
+        assert_eq!((s.status.as_deref(), s.note.as_deref(), s.name.as_deref()), (Some("limit"), Some("You've hit your limit"), Some("Hintergrund")));
+
+        // Ohne Job-Datei bleibt der Status aus der Session-Datei stehen
+        let mut other = bg_session("ffffffff");
+        background_job(&mut other, &dir);
+        assert_eq!(other.status.as_deref(), Some("shell"));
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

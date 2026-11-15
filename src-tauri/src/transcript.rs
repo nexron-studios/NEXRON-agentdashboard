@@ -130,8 +130,12 @@ pub struct Stats {
     /// Stand der letzten `cost-state`-Zeile, die Claude Code selbst berechnet hat.
     pub cost: Option<Cost>,
     pub file_bytes: u64,
-    /// Shells, agents and skills of the main session still running in the background
-    pub background: u32,
+    /// Launch times of the main session's shells, agents and skills still running in the background
+    #[serde(skip)]
+    pub background_launches: Vec<i64>,
+    /// When the last of them reported back
+    #[serde(skip)]
+    pub background_ended_at: i64,
 }
 
 #[derive(Default)]
@@ -340,7 +344,7 @@ impl Transcript {
         }
         self.tool_names.insert(id.clone(), name.clone());
         if !sidechain {
-            self.background.tool_use(&id, &name, input);
+            self.background.tool_use(&id, &name, input, t);
         }
 
         s.steps.push(Step::tool(t, &name, &id, input, sidechain));
@@ -377,7 +381,7 @@ impl Transcript {
         let result = &v["toolUseResult"];
         if !sidechain {
             self.background.tool_result(id, result);
-            self.stats.background = self.background.count();
+            self.stats.background_launches = self.background.launches();
         }
         if let Some(&i) = self.agent_index.get(id) {
             let agent = &mut self.stats.agents[i];
@@ -417,8 +421,9 @@ impl Transcript {
     fn task_notification(&mut self, text: &str, t: i64) {
         let Some(status) = between(text, "<status>", "</status>") else { return };
         let (task_id, tool_use_id) = (between(text, "<task-id>", "</task-id>"), between(text, "<tool-use-id>", "</tool-use-id>"));
-        self.background.finished(task_id, tool_use_id);
-        self.stats.background = self.background.count();
+        self.background.finished(task_id, tool_use_id, t);
+        self.stats.background_launches = self.background.launches();
+        self.stats.background_ended_at = self.background.ended_at();
         let Some(&i) = [tool_use_id, task_id].into_iter().flatten().find_map(|id| self.agent_index.get(id)) else { return };
         let agent = &mut self.stats.agents[i];
         agent.finished = Some(t);
@@ -684,12 +689,12 @@ mod tests {
             json!({"type": "user", "timestamp": "2026-11-15T15:55:03Z", "toolUseResult": {"backgroundTaskId": "bdev"},
                 "message": {"content": [{"type": "tool_result", "tool_use_id": "s2", "content": "läuft"}]}}),
         ]));
-        assert_eq!(t.stats.background, 2);
+        assert_eq!(t.stats.background_launches.len(), 2);
         t.ingest(&lines(&[
             notice("<task-notification>\n<task-id>af62</task-id>\n<status>completed</status>\n</task-notification>", false),
             notice("<task-notification>\n<task-id>bjq2</task-id>\n<tool-use-id>s1</tool-use-id>\n<status>completed</status>\n</task-notification>", true),
         ]));
-        assert_eq!((t.stats.agents[0].status.as_str(), t.stats.background), ("done", 0));
+        assert_eq!((t.stats.agents[0].status.as_str(), t.stats.background_launches.len()), ("done", 0));
     }
 
     #[test]
@@ -749,8 +754,10 @@ mod tests {
 
         let mut f = fs::OpenOptions::new().append(true).open(&path).unwrap();
         std::io::Write::write_all(&mut f, b"mpt\",\"lastPrompt\":\"weiter\"}\n").unwrap();
+        drop(f);
         t.refresh().unwrap();
         assert_eq!(t.stats.last_prompt, "weiter");
-        fs::remove_dir_all(dir).unwrap();
+        // Only a temp folder; on Windows a virus scanner may still hold the fresh file for a moment
+        let _ = fs::remove_dir_all(dir);
     }
 }

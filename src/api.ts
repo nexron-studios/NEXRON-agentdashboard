@@ -162,7 +162,6 @@ export interface Prompt {
 }
 
 export interface Stats {
-  background: number
   title: string
   firstPrompt: string
   currentTask: string
@@ -215,6 +214,8 @@ export interface Detail {
   herdr: HerdrPlace | null
   topic: string
   titlePending: boolean
+  /** Background work Claude still waits for (shells, agents, forked skills) */
+  background: number
   stats: Stats
 }
 

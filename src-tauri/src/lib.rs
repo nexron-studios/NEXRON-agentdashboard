@@ -126,7 +126,7 @@ impl MachineSummary {
         for r in rows {
             match r.status.as_str() {
                 "blocked" | "waiting" => self.approval += 1,
-                "busy" | "shell" => self.busy += 1,
+                "busy" | "shell" | "background" => self.busy += 1,
                 "idle" | "done" if r.prompts > 0 => self.waiting += 1,
                 _ => {}
             }
@@ -145,6 +145,8 @@ struct Detail {
     herdr: Option<HerdrPlace>,
     topic: String,
     title_pending: bool,
+    /// Background work Claude still waits for, see `background.rs`
+    background: u32,
     stats: Stats,
 }
 
@@ -239,17 +241,26 @@ fn status(live: Option<&LiveSession>, herdr: Option<&HerdrPlace>, stats: &Stats)
     };
     // Claude's turn is over, but it still waits for a build, an agent or a review it started
     let turn_over = matches!(status.as_str(), "idle" | "done");
-    if turn_over && stats.background > 0 {
+    if turn_over && background_running(stats, Some(live)) > 0 {
         return "background".into();
     }
     status
+}
+
+/// Background work still running, counting only what the current Claude process started: a
+/// restarted or resumed process lost the rest, and no notice about it will ever arrive.
+fn background_running(stats: &Stats, live: Option<&LiveSession>) -> u32 {
+    let Some(live) = live else { return 0 };
+    let since = live.started_at.unwrap_or(0);
+    stats.background_launches.iter().filter(|&&t| t >= since).count() as u32
 }
 
 /// Der Statuswechsel auf „idle“ ist der genaue Zeitpunkt, an dem Claude fertig wurde. Meldet die
 /// Session-Datei etwas anderes (herdr ist schneller), ist der letzte Transkript-Eintrag die beste Näherung.
 fn finished_at(stats: &Stats, live: Option<&LiveSession>) -> i64 {
     match live {
-        Some(l) if l.status.as_deref() == Some("idle") => l.status_updated_at.unwrap_or(stats.last_t),
+        // Waiting for background work ends with its last notice, after Claude's turn went idle
+        Some(l) if l.status.as_deref() == Some("idle") => l.status_updated_at.unwrap_or(stats.last_t).max(stats.background_ended_at),
         _ => stats.last_t,
     }
 }
@@ -304,7 +315,7 @@ fn row(stats: &Stats, session_id: String, account: String, live: Option<&LiveSes
         agents: card_agents(stats),
         agents_total: stats.agents.len(),
         agents_running: stats.agents.iter().filter(|a| a.status == "running").count(),
-        background: stats.background,
+        background: background_running(stats, live),
     }
 }
 
@@ -485,7 +496,8 @@ async fn session_detail(session_id: String, machine: Option<String>, state: taur
     let status = status(live.as_ref(), herdr.as_ref(), &stats);
     let topic = state.topics.cached(&session_id, &stats);
     let title_pending = live.is_some() && title_pending(&stats, &topic, &state.topics, &session_id);
-    Ok(Detail { session_id, live, status, account, herdr, topic, title_pending, stats })
+    let background = background_running(&stats, live.as_ref());
+    Ok(Detail { session_id, live, status, account, herdr, topic, title_pending, background, stats })
 }
 
 /// Detail einer Session auf einer anderen Machine. Ist sie beendet, schickt die Machine ihr Transkript
@@ -507,7 +519,8 @@ fn remote_detail(state: &AppState, r: &remote::Remote, session_id: String) -> Re
     let status = status(live.as_ref(), herdr.as_ref(), &stats);
     let topic = state.topics.cached(&session_id, &stats);
     let title_pending = live.is_some() && title_pending(&stats, &topic, &state.topics, &session_id);
-    Ok(Detail { session_id, live, status, account, herdr, topic, title_pending, stats })
+    let background = background_running(&stats, live.as_ref());
+    Ok(Detail { session_id, live, status, account, herdr, topic, title_pending, background, stats })
 }
 
 /// Plan quota per logged-in account. Blocking (keychain + curl), so off the async workers.

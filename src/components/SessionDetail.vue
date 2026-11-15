@@ -102,7 +102,7 @@ const errors = computed(() => [...(s.value?.errors ?? [])].reverse().slice(0, 40
 </script>
 
 <template>
-  <div class="mx-auto max-w-[1680px] px-8 pt-8 pb-12">
+  <div class="mx-auto max-w-[1920px] px-8 pt-8 pb-12">
     <p v-if="error" class="flex items-center gap-2 rounded-xl border border-critical/40 bg-critical/10 px-4 py-3">
       <TriangleAlert :size="18" class="shrink-0 text-critical" /> {{ error }}
     </p>

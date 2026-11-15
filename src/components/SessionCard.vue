@@ -208,7 +208,7 @@ const tool = computed(() => toolKind(action.value.tool))
     <div class="mt-auto flex items-center gap-2 pt-5">
       <FolderLink :path="s.cwd" class="min-w-0" />
       <div v-if="s.live" class="ml-auto flex shrink-0 items-center gap-2">
-        <SessionClear v-if="s.herdr" :herdr="s.herdr" :status="s.status" />
+        <SessionClear v-if="s.herdr" :herdr="s.herdr" :session-id="s.sessionId" :status="s.status" />
         <SessionOpen :herdr="s.herdr" :pid="s.pid" :cwd="s.cwd" :entrypoint="s.entrypoint" />
       </div>
     </div>

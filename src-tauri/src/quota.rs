@@ -163,7 +163,13 @@ fn fetch(credential: &Credential) -> Result<Vec<QuotaWindow>, FetchError> {
 /// GET through the system curl. The headers go in on stdin (`-H @-`) so the bearer token never
 /// shows up in the process list.
 fn curl_get(url: &str, token: &str) -> Result<(u16, String), String> {
-    let mut child = Command::new("curl")
+    let mut cmd = Command::new("curl");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW, sonst blitzt alle 90 s eine Konsole auf
+    }
+    let mut child = cmd
         .args(["-s", "--max-time", REQUEST_TIMEOUT_SECS, "-H", "@-", "-w", "\n%{http_code}", url])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

@@ -588,8 +588,8 @@ fn navigator_target(state: &AppState, machine: Option<&str>, pane_id: Option<&st
 }
 
 #[tauri::command]
-async fn clear_herdr(pane_id: String, machine: Option<String>, state: tauri::State<'_, AppState>) -> Result<(), String> {
-    herdr::clear_chat(state.remote(machine.as_deref()).as_deref(), &pane_id)
+async fn clear_herdr(pane_id: String, session_id: String, machine: Option<String>, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    herdr::clear_chat(state.remote(machine.as_deref()).as_deref(), &pane_id, &session_id)
 }
 
 #[tauri::command]

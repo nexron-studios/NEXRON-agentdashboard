@@ -13,6 +13,8 @@ $ErrorActionPreference = 'SilentlyContinue'
 $cfg = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('__CONFIG__')) | ConvertFrom-Json
 $userHome = $env:USERPROFILE
 $herdrExe = Join-Path $userHome '.herdr\packages\standalone\current\herdr.exe'
+# Not every install has the `current` folder; herdr on PATH then points into `releases\<version>`
+if (-not (Test-Path $herdrExe)) { $herdrExe = (Get-Command herdr.exe).Source }
 $wantFile = Join-Path $env:TEMP $cfg.wantFile
 $utf8 = New-Object Text.UTF8Encoding $false
 $stdout = [Console]::OpenStandardOutput()
@@ -141,7 +143,7 @@ function Invoke-Pass {
   }
 
   # Piped $null: herdr must not inherit the SSH session's stdin
-  if (Test-Path $herdrExe) { $out.herdr = ($null | & $herdrExe api snapshot) -join "`n" }
+  if ($herdrExe -and (Test-Path $herdrExe)) { $out.herdr = ($null | & $herdrExe api snapshot) -join "`n" }
   return $out
 }
 

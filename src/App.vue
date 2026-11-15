@@ -128,7 +128,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
             <span class="hero-title text-ink">Agent<span class="hero-dash" aria-hidden="true" /></span>
             <PixelWord text="Dashboard" :height="40" />
           </h1>
-          <p class="mt-3 flex items-center gap-2 text-[15px] font-semibold text-brand">
+          <p class="mt-3 flex items-center gap-2 text-[15px] font-semibold text-ink-3">
             <ClawdLogo :size="18" class="clawd-hop" />
             {{ subtitle }}
           </p>

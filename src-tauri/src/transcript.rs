@@ -350,15 +350,10 @@ impl Transcript {
             return;
         }
         let Some(blocks) = content.as_array() else { return };
-        let mut first_text = None;
-        for b in blocks {
-            match b["type"].as_str() {
-                Some("tool_result") => self.tool_result(b, v, t, sidechain),
-                Some("text") if first_text.is_none() => first_text = b["text"].as_str(),
-                _ => {}
-            }
+        for b in blocks.iter().filter(|b| b["type"] == "tool_result") {
+            self.tool_result(b, v, t, sidechain);
         }
-        if let Some(text) = first_text {
+        if let Some(text) = first_text(content) {
             self.user_text(text, v, t);
         }
     }
@@ -384,15 +379,17 @@ impl Transcript {
         }
     }
 
-    /// Since Claude Code 2.1.3xx a background agent's completion arrives as a
-    /// `queued_command` attachment instead of a user message.
+    /// Since Claude Code 2.1.3xx a `queued_command` attachment replaces the user message for two
+    /// things: a background agent's completion, and a prompt typed while Claude was still working.
+    /// The typed prompt never shows up as a user message as well, so it counts here.
     fn attachment(&mut self, v: &Value, t: i64) {
         let a = &v["attachment"];
         if a["type"] != "queued_command" {
             return;
         }
-        if let Some(text) = a["prompt"].as_str().map(str::trim_start).filter(|s| s.starts_with(TASK_NOTIFICATION)) {
-            self.task_notification(text, t);
+        let prompt = &a["prompt"];
+        if let Some(text) = prompt.as_str().or_else(|| first_text(prompt)) {
+            self.user_text(text, v, t);
         }
     }
 
@@ -518,6 +515,11 @@ fn short_tool_name(name: &str) -> String {
     name.rsplit("__").next().unwrap_or(name).to_string()
 }
 
+/// Text des ersten Textblocks einer Nachricht aus Blöcken (Text, Bilder, Tool-Ergebnisse)
+fn first_text(content: &Value) -> Option<&str> {
+    content.as_array()?.iter().find(|b| b["type"] == "text")?["text"].as_str()
+}
+
 fn between<'a>(text: &'a str, start: &str, end: &str) -> Option<&'a str> {
     let from = text.find(start)? + start.len();
     let to = text[from..].find(end)? + from;
@@ -617,6 +619,27 @@ mod tests {
         t.ingest(&data);
         let a = &t.stats.agents[0];
         assert_eq!((a.status.as_str(), a.finished), ("done", parse_time("2026-11-11T09:23:40Z")));
+        assert_eq!(t.stats.prompts, 0);
+    }
+
+    #[test]
+    fn prompt_typed_while_working_becomes_the_current_task() {
+        let queued = |prompt: Value| {
+            json!({"isSidechain": false, "type": "attachment", "timestamp": "2026-11-15T15:53:39Z",
+                "attachment": {"type": "queued_command", "prompt": prompt}})
+        };
+        let mut t = Transcript::default();
+        t.ingest(&lines(&[
+            json!({"type": "user", "timestamp": "2026-11-15T15:50:06Z", "message": {"content": "ist das mit den Pushup Benachrichtigungen schon deployed"}}),
+            queued(json!([
+                {"type": "text", "text": "[Image #5] hier ist es nicht breit genug, das Degree ragt darüber hinaus"},
+                {"type": "image", "source": {"type": "base64", "data": "…"}},
+            ])),
+        ]));
+        assert_eq!((t.stats.prompts, t.stats.current_task_is_first), (2, false));
+        assert_eq!(t.stats.current_task, "Hier ist es nicht breit genug, das Degree ragt darüber hinaus");
+        t.ingest(&lines(&[queued(json!("und den Löschdialog bitte auch gleich reparieren"))]));
+        assert_eq!(t.stats.current_task, "Und den Löschdialog bitte auch gleich reparieren");
     }
 
     /// `AGENTDASHBOARD_SAMPLE=<pfad.jsonl> cargo test --release -- --ignored --nocapture`

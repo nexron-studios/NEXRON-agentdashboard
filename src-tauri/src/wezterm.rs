@@ -14,12 +14,10 @@
 //! `send-text --no-paste` arrive as key presses, and herdr switches the machine.
 
 use std::io::Write;
-use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// One write per key, as in Ghostty; herdr drops keys that arrive together
 const KEY_DELAY: Duration = Duration::from_millis(80);
 /// A herdr pane's title until herdr writes its own
@@ -46,7 +44,7 @@ fn wezterm_exe() -> Result<PathBuf, String> {
 
 fn quiet(program: &Path) -> Command {
     let mut cmd = Command::new(program);
-    cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).creation_flags(CREATE_NO_WINDOW);
+    crate::sessions::hide_console(cmd.stdout(Stdio::piped()).stderr(Stdio::piped()));
     cmd
 }
 
@@ -113,8 +111,16 @@ pub fn herdr_panes(workspaces: &[String]) -> Result<Vec<Pane>, String> {
     }
     let exe = wezterm_exe()?;
     let mut found = Vec::new();
+    let mut errors = Vec::new();
+    // One broken WezTerm instance must not keep herdr in the others from following
     for socket in sockets {
-        found.extend(panes_of(&exe, &socket, workspaces)?);
+        match panes_of(&exe, &socket, workspaces) {
+            Ok(panes) => found.extend(panes),
+            Err(e) => errors.push(e),
+        }
+    }
+    if found.is_empty() && !errors.is_empty() {
+        return Err(errors.join("; "));
     }
     Ok(found)
 }

@@ -202,11 +202,7 @@ fn ask_haiku(prompt: &str, profile_dir: Option<&Path>) -> Option<String> {
         Some(dir) if dir.file_name().is_some_and(|n| n != ".claude") => cmd.env("CLAUDE_CONFIG_DIR", dir),
         _ => cmd.env_remove("CLAUDE_CONFIG_DIR"),
     };
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-    }
+    crate::sessions::hide_console(&mut cmd);
     let mut child = cmd.spawn().ok()?;
     child.stdin.take()?.write_all(prompt.as_bytes()).ok()?;
     let started = Instant::now();

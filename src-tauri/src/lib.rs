@@ -651,12 +651,7 @@ async fn open_session(pid: Option<u32>, cwd: String, entrypoint: String) -> Resu
         if dir.is_dir() {
             let mut cmd = std::process::Command::new(if cfg!(windows) { "code.cmd" } else { "code" });
             cmd.arg(&dir);
-            #[cfg(windows)]
-            {
-                use std::os::windows::process::CommandExt;
-                const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-                cmd.creation_flags(CREATE_NO_WINDOW);
-            }
+            sessions::hide_console(&mut cmd);
             if cmd.spawn().is_ok() {
                 return Ok(());
             }

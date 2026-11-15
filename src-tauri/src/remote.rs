@@ -215,7 +215,7 @@ impl Remote {
         run_ps(
             &self.target,
             &format!(
-                "$h = Join-Path $env:USERPROFILE '.herdr\\packages\\standalone\\current\\herdr.exe'; if (-not (Test-Path $h)) {{ $h = (Get-Command herdr.exe).Source }}; $null | & $h {}",
+                "$h = Join-Path $env:USERPROFILE '.herdr\\packages\\standalone\\current\\herdr.exe'; if (-not (Test-Path $h)) {{ $h = (Get-Command herdr.exe -ErrorAction SilentlyContinue | Select-Object -First 1).Source }}; if (-not $h) {{ throw 'herdr.exe not found' }}; $null | & $h {}",
                 quoted.join(" ")
             ),
         )
@@ -390,8 +390,8 @@ impl Remote {
     }
 }
 
-/// Windows: fest das System-OpenSSH. Aus Git Bash gestartet stünde Gits MSYS-`ssh.exe` vorn im PATH,
-/// und das zerlegt die lange `-EncodedCommand`-Zeile (PowerShell: „schließende } fehlt“).
+/// Windows: always the system OpenSSH. Started from Git Bash, Git's MSYS `ssh.exe` would come first on
+/// PATH, and it breaks the long `-EncodedCommand` line (PowerShell: „schließende } fehlt“).
 fn ssh_binary() -> PathBuf {
     #[cfg(windows)]
     if let Some(root) = std::env::var_os("SystemRoot") {
@@ -412,12 +412,7 @@ fn ssh(target: &str) -> Command {
         let path = PathBuf::from(home).join(".ssh/cm-agentdashboard-%C");
         cmd.args(["-o", "ControlMaster=auto", "-o", "ControlPersist=300", "-o"]).arg(format!("ControlPath={}", path.display()));
     }
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        cmd.creation_flags(CREATE_NO_WINDOW);
-    }
+    crate::sessions::hide_console(&mut cmd);
     cmd.arg(target);
     cmd
 }

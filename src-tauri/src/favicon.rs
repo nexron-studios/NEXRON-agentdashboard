@@ -51,11 +51,7 @@ fn cached(file: &Path) -> Option<Vec<u8>> {
 fn fetch(domain: &str) -> Option<Vec<u8>> {
     let url = format!("https://{domain}/favicon.ico");
     let mut cmd = Command::new("curl");
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-    }
+    crate::sessions::hide_console(&mut cmd);
     let out = cmd
         .args(["-sfL", "--proto", "=https", "--proto-redir", "=https", "--max-redirs", "3"])
         .args(["--max-time", REQUEST_TIMEOUT_SECS, "--max-filesize", MAX_BYTES, &url])

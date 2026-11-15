@@ -165,10 +165,11 @@ pub fn send(target: &Target) -> Result<usize, String> {
 pub fn send(target: &Target) -> Result<usize, String> {
     let keys = keys(target);
     let panes = crate::wezterm::herdr_panes(&target.workspaces)?;
-    for pane in &panes {
-        crate::wezterm::type_keys(pane, &keys)?;
+    let errors: Vec<String> = panes.iter().filter_map(|pane| crate::wezterm::type_keys(pane, &keys).err()).collect();
+    if !panes.is_empty() && errors.len() == panes.len() {
+        return Err(errors.join("; "));
     }
-    Ok(panes.len())
+    Ok(panes.len() - errors.len())
 }
 
 #[cfg(not(any(target_os = "macos", windows)))]

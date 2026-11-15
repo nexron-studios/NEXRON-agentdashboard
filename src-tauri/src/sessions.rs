@@ -267,16 +267,22 @@ pub fn recent_transcripts(profiles: &[Profile], limit: usize) -> Vec<RecentTrans
     all
 }
 
-/// Startet ein Kommandozeilenprogramm ohne Konsolenfenster und liefert stdout bei Erfolg.
-pub fn run_quiet(program: &Path, args: &[&str]) -> Option<String> {
-    let mut cmd = Command::new(program);
-    cmd.args(args);
+/// On Windows every console program opens a visible console unless told otherwise. The dashboard
+/// starts programs on every refresh, so without this a console would flash each time.
+pub fn hide_console(cmd: &mut Command) -> &mut Command {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000; // sonst blitzt bei jedem Refresh ein Konsolenfenster auf
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
+    cmd
+}
+
+/// Startet ein Kommandozeilenprogramm ohne Konsolenfenster und liefert stdout bei Erfolg.
+pub fn run_quiet(program: &Path, args: &[&str]) -> Option<String> {
+    let mut cmd = Command::new(program);
+    hide_console(cmd.args(args));
     let out = cmd.output().ok()?;
     out.status.success().then(|| String::from_utf8_lossy(&out.stdout).into_owned())
 }

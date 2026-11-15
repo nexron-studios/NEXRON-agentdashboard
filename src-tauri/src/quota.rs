@@ -164,11 +164,7 @@ fn fetch(credential: &Credential) -> Result<Vec<QuotaWindow>, FetchError> {
 /// shows up in the process list.
 fn curl_get(url: &str, token: &str) -> Result<(u16, String), String> {
     let mut cmd = Command::new("curl");
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW, sonst blitzt alle 90 s eine Konsole auf
-    }
+    crate::sessions::hide_console(&mut cmd);
     let mut child = cmd
         .args(["-s", "--max-time", REQUEST_TIMEOUT_SECS, "-H", "@-", "-w", "\n%{http_code}", url])
         .stdin(Stdio::piped())

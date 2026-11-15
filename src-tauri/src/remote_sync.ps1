@@ -14,7 +14,7 @@ $cfg = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('__CONFIG__')
 $userHome = $env:USERPROFILE
 $herdrExe = Join-Path $userHome '.herdr\packages\standalone\current\herdr.exe'
 # Not every install has the `current` folder; herdr on PATH then points into `releases\<version>`
-if (-not (Test-Path $herdrExe)) { $herdrExe = (Get-Command herdr.exe).Source }
+if (-not (Test-Path $herdrExe)) { $herdrExe = (Get-Command herdr.exe | Select-Object -First 1).Source }
 $wantFile = Join-Path $env:TEMP $cfg.wantFile
 $utf8 = New-Object Text.UTF8Encoding $false
 $stdout = [Console]::OpenStandardOutput()

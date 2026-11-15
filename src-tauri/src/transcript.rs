@@ -25,7 +25,7 @@ const DEFAULT_WINDOW: u64 = 200_000;
 const LARGE_WINDOW: u64 = 1_000_000;
 const TASK_NOTIFICATION: &str = "<task-notification>";
 /// Zeilentypen, die nichts für das Dashboard enthalten, aber den Großteil der Datei ausmachen.
-const SKIPPED_PREFIXES: [&[u8]; 3] = [br#"{"type":"api-request"#, br#"{"type":"attachment""#, br#"{"type":"file-history"#];
+const SKIPPED_PREFIXES: [&[u8]; 2] = [br#"{"type":"api-request"#, br#"{"type":"file-history"#];
 
 #[derive(Serialize, Clone, Default, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -379,16 +379,20 @@ impl Transcript {
         }
     }
 
-    /// Since Claude Code 2.1.3xx a `queued_command` attachment replaces the user message for two
-    /// things: a background agent's completion, and a prompt typed while Claude was still working.
-    /// The typed prompt never shows up as a user message as well, so it counts here.
+    /// Since Claude Code 2.1.3xx a `queued_command` attachment replaces the user message for a
+    /// background agent's completion, for messages from peer agents, and for a prompt the user typed
+    /// while Claude was still working. Only the typed prompt (`origin.kind` "human") is a prompt; it
+    /// never shows up as a user message as well.
     fn attachment(&mut self, v: &Value, t: i64) {
         let a = &v["attachment"];
-        if a["type"] != "queued_command" {
+        if a["type"] != "queued_command" || v["isSidechain"].as_bool() == Some(true) {
             return;
         }
         let prompt = &a["prompt"];
-        if let Some(text) = prompt.as_str().or_else(|| first_text(prompt)) {
+        let Some(text) = prompt.as_str().or_else(|| first_text(prompt)) else { return };
+        if text.trim_start().starts_with(TASK_NOTIFICATION) {
+            self.task_notification(text.trim_start(), t);
+        } else if a["origin"]["kind"] == "human" {
             self.user_text(text, v, t);
         }
     }
@@ -515,7 +519,7 @@ fn short_tool_name(name: &str) -> String {
     name.rsplit("__").next().unwrap_or(name).to_string()
 }
 
-/// Text des ersten Textblocks einer Nachricht aus Blöcken (Text, Bilder, Tool-Ergebnisse)
+/// Text of the first text block in a message made of blocks (text, images, tool results)
 fn first_text(content: &Value) -> Option<&str> {
     content.as_array()?.iter().find(|b| b["type"] == "text")?["text"].as_str()
 }
@@ -626,7 +630,7 @@ mod tests {
     fn prompt_typed_while_working_becomes_the_current_task() {
         let queued = |prompt: Value| {
             json!({"isSidechain": false, "type": "attachment", "timestamp": "2026-11-15T15:53:39Z",
-                "attachment": {"type": "queued_command", "prompt": prompt}})
+                "attachment": {"type": "queued_command", "prompt": prompt, "origin": {"kind": "human"}}})
         };
         let mut t = Transcript::default();
         t.ingest(&lines(&[
@@ -640,6 +644,15 @@ mod tests {
         assert_eq!(t.stats.current_task, "Hier ist es nicht breit genug, das Degree ragt darüber hinaus");
         t.ingest(&lines(&[queued(json!("und den Löschdialog bitte auch gleich reparieren"))]));
         assert_eq!(t.stats.current_task, "Und den Löschdialog bitte auch gleich reparieren");
+    }
+
+    #[test]
+    fn message_from_a_peer_agent_is_no_prompt() {
+        let mut t = Transcript::default();
+        t.ingest(&lines(&[json!({"isSidechain": false, "type": "attachment", "timestamp": "2026-11-15T15:53:39Z",
+            "attachment": {"type": "queued_command", "isMeta": true, "origin": {"kind": "peer"},
+                "prompt": "Note from the backend: all file endpoints require the bearer token"}})]));
+        assert_eq!((t.stats.prompts, t.stats.current_task.as_str()), (0, ""));
     }
 
     /// `AGENTDASHBOARD_SAMPLE=<pfad.jsonl> cargo test --release -- --ignored --nocapture`

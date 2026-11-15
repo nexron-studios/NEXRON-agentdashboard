@@ -1,6 +1,8 @@
 mod favicon;
 mod herdr;
 mod herdr_follow;
+#[cfg(windows)]
+mod wezterm;
 mod quota;
 mod remote;
 mod sessions;
@@ -521,7 +523,7 @@ async fn focus_herdr(tab_id: String, pane_id: String, machine: Option<String>, s
     herdr::focus_tab(remote.as_deref(), &tab_id)
 }
 
-/// Der herdr-Client in Ghostty wechselt auf dieselbe Machine wie der Umschalter im Dashboard.
+/// Der herdr-Client in Ghostty bzw. WezTerm wechselt auf dieselbe Machine wie der Umschalter im Dashboard.
 #[tauri::command]
 async fn follow_in_herdr(machine: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
     if herdr_shows(Some(&machine)) {
@@ -565,23 +567,24 @@ async fn follow(state: &AppState, machine: Option<&str>, pane_id: Option<&str>) 
 /// ist die des herdr-Clients: Local, dann die gespeicherten Machines wie in `herdr machine list`.
 fn navigator_target(state: &AppState, machine: Option<&str>, pane_id: Option<&str>) -> Result<herdr_follow::Target, String> {
     let profile = machine.filter(|m| *m != LOCAL_MACHINE).map(str::to_string);
-    let local = herdr::local_navigator_rows().ok_or("herdr läuft auf diesem Rechner nicht")?;
+    let local = herdr::local_navigator().ok_or("herdr läuft auf diesem Rechner nicht")?;
     let mut endpoints = vec![(None, local)];
-    endpoints.extend(state.remotes().iter().map(|r| (Some(r.id.clone()), r.view().navigator_rows)));
+    endpoints.extend(state.remotes().iter().map(|r| (Some(r.id.clone()), r.view().navigator)));
     let mut offset = 0;
     let mut row = None;
-    for (id, rows) in &endpoints {
+    for (id, nav) in &endpoints {
         if *id == profile {
             let within = match pane_id {
                 None => Some(0),
-                Some(p) => rows.iter().position(|r| r.as_deref() == Some(p)).map(|i| i + 1),
+                Some(p) => nav.rows.iter().position(|r| r.as_deref() == Some(p)).map(|i| i + 1),
             };
             row = within.map(|w| offset + w);
         }
-        offset += 1 + rows.len();
+        offset += 1 + nav.rows.len();
     }
     let row = row.ok_or("herdr kennt diese Machine oder diesen Tab nicht")?;
-    Ok(herdr_follow::Target { row, total_rows: offset })
+    let workspaces = endpoints.into_iter().flat_map(|(_, nav)| nav.workspaces).collect();
+    Ok(herdr_follow::Target { row, total_rows: offset, workspaces })
 }
 
 #[tauri::command]

@@ -48,8 +48,8 @@ pub struct View {
     pub recent: Vec<RemoteRecent>,
     /// Nach Session-ID, denn PIDs der Machine lassen sich hier nicht abgleichen
     pub places: HashMap<String, HerdrPlace>,
-    /// Zeilen dieser Machine im herdr-Navigator, für `herdr_follow`
-    pub navigator_rows: Vec<Option<String>>,
+    /// Navigator-Zeilen und Workspaces dieser Machine, für `herdr_follow`
+    pub navigator: herdr::Navigator,
 }
 
 #[derive(Clone)]
@@ -339,7 +339,7 @@ impl Remote {
         let herdr = frame.herdr.as_deref().and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok());
         let snap = herdr.as_ref().map(|v| &v["result"]["snapshot"]);
         view.places = snap.map(|s| herdr::places_by_session(s, &self.id)).unwrap_or_default();
-        view.navigator_rows = snap.map(herdr::navigator_rows).unwrap_or_default();
+        view.navigator = snap.map(herdr::navigator).unwrap_or_default();
         view.live = live;
         let keep_full: HashSet<String> = view.live.iter().map(|l| l.session_id.clone()).chain(self.wanted()).collect();
         let keep_tail: HashSet<String> = view.recent.iter().map(|r| r.session_id.clone()).collect();

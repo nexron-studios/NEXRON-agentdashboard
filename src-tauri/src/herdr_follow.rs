@@ -1,4 +1,5 @@
-//! herdr in Ghostty folgt dem Machine-Umschalter und „Zum Chat“ auf anderen Machines.
+//! herdr in Ghostty (Mac) bzw. WezTerm (Windows, wezterm.rs) folgt dem Machine-Umschalter und
+//! „Zum Chat“ auf anderen Machines.
 //!
 //! herdr 0.9 hat keinen Befehl, der die gewählte Machine eines offenen Clients wechselt: Socket-API
 //! und CLI (`--machine`) routen nur Befehle an einen Server, die Auswahl lebt im Client. Der einzige
@@ -15,17 +16,19 @@
 use std::process::Command;
 
 /// herdrs Standardtasten; eigene Belegungen in `~/.config/herdr/config.toml` brechen das
-const PREFIX: &str = "\\x02"; // ctrl+b
+const PREFIX: &str = "\x02"; // ctrl+b
 const OPEN_NAVIGATOR: &str = "g";
-const PAGE_UP: &str = "\\x15"; // ctrl+u
+const PAGE_UP: &str = "\x15"; // ctrl+u
 const DOWN: &str = "j";
-const ENTER: &str = "\\r";
+const ENTER: &str = "\r";
 const PAGE_ROWS: usize = 8;
 
 /// Eine Zeile im Navigator und die Zeilenzahl aller Machines davor und danach
 pub struct Target {
     pub row: usize,
     pub total_rows: usize,
+    /// Workspace-Namen aller Machines, für die Suche nach dem herdr-Terminal in WezTerm
+    pub workspaces: Vec<String>,
 }
 
 /// Die Tasten, die von einer beliebigen Navigator-Zeile zur Ziel-Zeile führen
@@ -36,6 +39,12 @@ fn keys(target: &Target) -> Vec<&'static str> {
     keys.extend(std::iter::repeat_n(DOWN, target.row));
     keys.push(ENTER);
     keys
+}
+
+/// Ghosttys `text:`-Aktion liest Escapes wie `\x02`; AppleScript selbst kennt keine Steuerzeichen.
+#[cfg(target_os = "macos")]
+fn ghostty_text(key: &str) -> String {
+    key.chars().map(|c| if c.is_ascii_control() { format!("\\x{:02x}", c as u8) } else { c.to_string() }).collect()
 }
 
 #[cfg(target_os = "macos")]
@@ -112,25 +121,34 @@ const TYPE_KEYS: &str = r#"on run argv
   return "missing"
 end run"#;
 
-/// Machine, die der herdr-Client gerade zeigt: herdr schreibt sie bei jedem Wechsel nach
-/// `endpoint-selection.json` (`selected_profile`, `null` = Local). `None`, wenn die Datei fehlt.
 #[cfg(target_os = "macos")]
-pub fn selected_profile() -> Option<Option<String>> {
+fn endpoint_selection() -> Option<std::path::PathBuf> {
     let home = std::env::var_os("HOME")?;
-    let path = std::path::Path::new(&home).join(".local/state/herdr/client/endpoint-selection.json");
-    let v: serde_json::Value = serde_json::from_slice(&std::fs::read(path).ok()?).ok()?;
-    Some(v["selected_profile"].as_str().map(str::to_string))
+    Some(std::path::Path::new(&home).join(".local/state/herdr/client/endpoint-selection.json"))
 }
 
-#[cfg(not(target_os = "macos"))]
-pub fn selected_profile() -> Option<Option<String>> {
+#[cfg(windows)]
+fn endpoint_selection() -> Option<std::path::PathBuf> {
+    let local = std::env::var_os("LOCALAPPDATA")?;
+    Some(std::path::Path::new(&local).join("herdr").join("client").join("endpoint-selection.json"))
+}
+
+#[cfg(not(any(target_os = "macos", windows)))]
+fn endpoint_selection() -> Option<std::path::PathBuf> {
     None
+}
+
+/// Machine, die der herdr-Client gerade zeigt: herdr schreibt sie bei jedem Wechsel nach
+/// `endpoint-selection.json` (`selected_profile`, `null` = Local). `None`, wenn die Datei fehlt.
+pub fn selected_profile() -> Option<Option<String>> {
+    let v: serde_json::Value = serde_json::from_slice(&std::fs::read(endpoint_selection()?).ok()?).ok()?;
+    Some(v["selected_profile"].as_str().map(str::to_string))
 }
 
 /// Tippt die Tasten in jeden herdr-Client in Ghostty und gibt zurück, in wie viele.
 #[cfg(target_os = "macos")]
 pub fn send(target: &Target) -> Result<usize, String> {
-    let actions: Vec<String> = keys(target).iter().map(|k| format!("text:{k}")).collect();
+    let actions: Vec<String> = keys(target).iter().map(|k| format!("text:{}", ghostty_text(k))).collect();
     let terminals = herdr_terminals()?;
     for terminal in &terminals {
         let args: Vec<String> = std::iter::once(terminal.clone()).chain(actions.iter().cloned()).collect();
@@ -142,7 +160,18 @@ pub fn send(target: &Target) -> Result<usize, String> {
     Ok(terminals.len())
 }
 
-#[cfg(not(target_os = "macos"))]
+/// Tippt die Tasten in jeden herdr-Client in WezTerm und gibt zurück, in wie viele.
+#[cfg(windows)]
+pub fn send(target: &Target) -> Result<usize, String> {
+    let keys = keys(target);
+    let panes = crate::wezterm::herdr_panes(&target.workspaces);
+    for pane in &panes {
+        crate::wezterm::type_keys(pane, &keys)?;
+    }
+    Ok(panes.len())
+}
+
+#[cfg(not(any(target_os = "macos", windows)))]
 pub fn send(_target: &Target) -> Result<usize, String> {
     Ok(0)
 }
@@ -157,7 +186,7 @@ mod tests {
     #[test]
     #[ignore]
     fn type_keys_script_runs() {
-        let args = vec!["no-such-terminal".to_string(), format!("text:{PREFIX}")];
+        let args = vec!["no-such-terminal".to_string(), format!("text:{}", ghostty_text(PREFIX))];
         assert_eq!(osascript(TYPE_KEYS, &args).unwrap().trim(), "missing");
     }
 
@@ -173,7 +202,7 @@ mod tests {
 
     #[test]
     fn keys_reach_the_row_from_anywhere() {
-        let target = Target { row: 9, total_rows: 17 };
+        let target = Target { row: 9, total_rows: 17, workspaces: Vec::new() };
         let keys = keys(&target);
         assert_eq!(&keys[..2], &[PREFIX, OPEN_NAVIGATOR]);
         // 17 Zeilen: drei Seiten hoch reichen von ganz unten bis oben, eine mehr zur Sicherheit

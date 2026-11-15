@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-// Pixel-Schriftzug wie im Homeserver-Header: weiße Blockbuchstaben, dunkle Kontur, versetzter
-// Schatten in Markenfarbe, Punkt am Ende. Als SVG statt Webfont, damit die App offline bleibt
-// und die Kanten bei jeder Größe scharf sind. Nur die Glyphen, die gebraucht werden.
+// Pixel lettering as in the homeserver header: white block letters, dark outline, offset shadow in
+// the brand colour, a dot at the end. SVG instead of a web font, so the app stays offline and the
+// edges stay sharp at any size. Only the glyphs that are needed.
 const GLYPHS: Record<string, string[]> = {
   A: ['.###.', '#...#', '#####', '#...#', '#...#'],
   B: ['####.', '#...#', '####.', '#...#', '####.'],
@@ -26,13 +26,13 @@ const layout = computed(() => {
   for (const ch of props.text.toUpperCase()) {
     const glyph = GLYPHS[ch]
     if (!glyph) {
-      if (import.meta.env.DEV) console.warn(`PixelWord: keine Glyphe für "${ch}"`)
+      if (import.meta.env.DEV) console.warn(`PixelWord: no glyph for "${ch}"`)
       continue
     }
     glyph.forEach((row, y) => [...row].forEach((c, dx) => c === '#' && cells.push({ x: x + dx, y })))
     x += glyph[0].length + GAP
   }
-  // Punkt: eine Zelle in Markenfarbe, abgerundet, auf der Grundlinie
+  // Dot: one rounded cell in the brand colour, on the baseline
   const dot = { x, y: ROWS - 1 }
   return { cells, dot, width: x + 1 + SHADOW + OUTLINE }
 })

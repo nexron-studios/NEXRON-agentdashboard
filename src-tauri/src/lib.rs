@@ -17,6 +17,7 @@ use serde::Serialize;
 use sessions::{LiveSession, Profile};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use transcript::{AgentRun, Context, Stats, Transcript};
@@ -689,11 +690,11 @@ async fn open_session(pid: Option<u32>, cwd: String, entrypoint: String) -> Resu
 const DESIGN_WIDTH: f64 = 1200.0;
 /// Darunter wird die Schrift zu klein zum Lesen; dann bricht das Raster lieber um.
 const MIN_ZOOM: f64 = 0.7;
-/// Bezugsbildschirm in logischen px: Größere Monitore zeigen dieselbe Aufteilung, nur entsprechend größer.
-/// Mehr Spalten wären auf 4K zwar möglich, aber dann blieben die Karten so klein wie auf Full HD.
+/// Reference screen in logical px: larger monitors show the same layout, just larger. More columns
+/// would fit on 4K, but the cards would then stay as small as on Full HD.
 const REFERENCE_SCREEN: (f64, f64) = (1920.0, 1080.0);
 
-/// Über die knappere Seite, damit ein Ultrawide nicht höher zoomt, als seine Höhe hergibt.
+/// By the tighter side, so an ultrawide does not zoom further than its height allows.
 fn display_factor(logical_w: f64, logical_h: f64) -> f64 {
     (logical_w / REFERENCE_SCREEN.0).min(logical_h / REFERENCE_SCREEN.1).max(1.0)
 }
@@ -703,16 +704,26 @@ fn monitor_factor(monitor: &tauri::Monitor) -> f64 {
     display_factor(size.width, size.height)
 }
 
+/// Fits the design width into the window; the lower limit and the full size grow with the monitor.
 fn zoom_for(logical_window_w: f64, display: f64) -> f64 {
-    let fit = (logical_window_w / display / DESIGN_WIDTH).clamp(MIN_ZOOM, 1.0);
-    (fit * display * 100.0).round() / 100.0
+    let zoom = (logical_window_w / DESIGN_WIDTH).clamp(MIN_ZOOM * display, display);
+    (zoom * 100.0).round() / 100.0
 }
 
-fn zoom_to_window(win: &tauri::WebviewWindow) {
+/// Applies the zoom for the window's size and monitor. `last` holds the last zoom in percent:
+/// dragging the window fires many Moved events, and WebView2 relays out on every set_zoom.
+fn zoom_to_window(win: &tauri::WebviewWindow, last: &AtomicU32) {
     let (Ok(size), Ok(scale)) = (win.inner_size(), win.scale_factor()) else { return };
-    let display = win.current_monitor().ok().flatten().map_or(1.0, |m| monitor_factor(&m));
-    // Schlägt das fehl, bleibt die Oberfläche nur unskaliert; das Dashboard funktioniert weiter.
-    let _ = win.set_zoom(zoom_for(size.width as f64 / scale, display));
+    // Same fallback as fit_to_monitor, so size and zoom always come from one monitor
+    let monitor = win.current_monitor().ok().flatten().or_else(|| win.primary_monitor().ok().flatten());
+    let display = monitor.map_or(1.0, |m| monitor_factor(&m));
+    let zoom = zoom_for(size.width as f64 / scale, display);
+    let percent = (zoom * 100.0).round() as u32;
+    if last.swap(percent, Ordering::Relaxed) == percent {
+        return;
+    }
+    // On failure the UI only stays unscaled; the dashboard keeps working.
+    let _ = win.set_zoom(zoom);
 }
 
 /// Startgröße kompakt für den Platz neben dem Terminal: so groß, dass bei herausgezoomter
@@ -774,12 +785,13 @@ pub fn run() {
             }
             if let Some(win) = app.get_webview_window("main") {
                 fit_to_monitor(&win);
-                zoom_to_window(&win);
+                let last_zoom = Arc::new(AtomicU32::new(0));
+                zoom_to_window(&win, &last_zoom);
                 let zoomed = win.clone();
-                // Moved: Beim Ziehen auf einen anderen Monitor ändert sich der Faktor ohne Resize.
+                // Moved: dragging onto another monitor changes the factor without a resize.
                 win.on_window_event(move |event| {
                     if matches!(event, tauri::WindowEvent::Resized(_) | tauri::WindowEvent::Moved(_)) {
-                        zoom_to_window(&zoomed);
+                        zoom_to_window(&zoomed, &last_zoom);
                     }
                 });
             }

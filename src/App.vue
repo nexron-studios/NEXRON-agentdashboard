@@ -58,14 +58,16 @@ const counts = computed(() => {
 
 const OS_NAMES: Record<string, string> = { windows: 'Windows', macos: 'macOS', linux: 'Linux' }
 
-// Unterzeile wie beim Homeserver: welcher Rechner, welches System, welche Profile
+// Subtitle as on the homeserver: which computer, which system, which profiles
 const subtitle = computed(() => {
   const m = machine.value
-  if (!m) return 'Verbindet …'
+  if (!m) return error.value ? 'Nicht erreichbar' : 'Verbindet …'
   const parts = [m.label]
   if (m.host && m.host !== m.label) parts.push(m.host)
   if (OS_NAMES[m.os]) parts.push(OS_NAMES[m.os])
-  if (profiles.value.length) parts.push(profiles.value.map((p) => p.label).join(' + '))
+  // Right after a switch the profiles still belong to the previous machine until its overview arrives
+  const own = overview.value?.machine === m.id ? overview.value.profiles : []
+  if (own.length) parts.push(own.map((p) => p.label).join(' + '))
   return parts.join(' · ')
 })
 
@@ -91,7 +93,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 <template>
   <div class="flex h-full flex-col">
-    <!-- Detailansicht: schmale Leiste, damit der Verlauf den Platz bekommt -->
+    <!-- Detail view: a slim bar, so the history gets the room -->
     <header v-if="selected" class="@container flex h-16 shrink-0 items-center gap-4 border-b border-line bg-app px-8">
       <button
         class="press -ml-2 flex items-center gap-2 rounded-lg px-2 py-1.5 text-[14px] font-medium text-ink-2 hover:bg-surface-2 hover:text-ink"
@@ -103,12 +105,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       <div class="ml-auto flex shrink-0 items-center gap-4">
         <QuotaMeter />
       </div>
-      <HeaderStats :counts="counts" />
+      <HeaderStats :counts="counts" compact />
       <HeaderClock compact class="ml-2" />
       <span class="relative h-2.5 w-2.5 shrink-0 rounded-full" :class="error ? 'bg-critical' : 'bg-good live-ping'" :title="liveTitle" />
+      <span class="sr-only">{{ error ? 'Fehler' : 'Live' }}</span>
     </header>
 
-    <!-- Übersicht: großer Header im Stil des Homeserver-Dashboards -->
+    <!-- Overview: large header in the style of the homeserver dashboard -->
     <header v-else class="@container starfield relative shrink-0 border-b border-line px-8 pt-5 pb-6">
       <div class="flex items-start justify-between gap-6">
         <NexronLogo :height="34" />

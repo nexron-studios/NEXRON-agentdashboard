@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { SessionRow } from '../api'
-import { ago, clock, date, headline, projectName } from '../format'
+import { ago, clock, date, headline, isBusy, projectName } from '../format'
 import SessionOpen from './SessionOpen.vue'
 
 /**
@@ -16,7 +16,7 @@ const emit = defineEmits<{ select: [id: string] }>()
 const free = computed(() => Math.max(0, props.live.length - props.done.length))
 // Erster freier Platz sagt, warum noch nichts dasteht
 const reason = computed(() => {
-  const busy = props.live.filter((s) => s.status === 'busy' || s.status === 'shell').length
+  const busy = props.live.filter((s) => isBusy(s.status)).length
   return busy ? `Noch nichts fertig · ${busy} ${busy === 1 ? 'arbeitet' : 'arbeiten'}` : 'Noch keine Session fertig'
 })
 const name = (s: SessionRow) => s.herdr?.tab || s.name || projectName(s.cwd)

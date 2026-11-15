@@ -74,8 +74,8 @@ export function projectName(cwd: string): string {
 
 /** Claude hält an und braucht eine Freigabe oder Auswahl */
 export const needsApproval = (status: string) => status === 'blocked' || status === 'waiting'
-/** Arbeitet gerade: denkt nach oder führt einen Befehl aus */
-export const isBusy = (status: string) => status === 'busy' || status === 'shell'
+/** Arbeitet gerade: denkt nach, führt einen Befehl aus oder wartet auf Hintergrund-Arbeit */
+export const isBusy = (status: string) => status === 'busy' || status === 'shell' || status === 'background'
 /** Hat seine Aufgabe abgeschlossen */
 export const awaitsYou = (status: string) => status === 'idle' || status === 'done'
 

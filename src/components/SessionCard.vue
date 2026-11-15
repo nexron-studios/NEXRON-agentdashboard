@@ -94,7 +94,7 @@ const tool = computed(() => toolKind(action.value.tool))
           <Code :size="13" :stroke-width="2" class="shrink-0" /> <span class="truncate">VS Code</span>
         </span>
       </div>
-      <StatusBadge :status="s.status" :fresh="fresh" :note="s.note" size="sm" />
+      <StatusBadge :status="s.status" :fresh="fresh" :note="s.note" :background="s.background" size="sm" />
     </div>
 
     <!-- Jeder Textbereich hat eine feste Zeilenzahl: Ändert sich der Text, bleibt die Karte gleich hoch. -->

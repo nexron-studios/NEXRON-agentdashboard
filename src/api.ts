@@ -55,6 +55,8 @@ export interface SessionRow {
   agents: AgentRun[]
   agentsTotal: number
   agentsRunning: number
+  /** Background work Claude still waits for (shells, agents, forked skills) */
+  background: number
 }
 
 /** Ein Rechner im Umschalter: dieser oder eine SSH-Machine aus herdr */
@@ -160,6 +162,7 @@ export interface Prompt {
 }
 
 export interface Stats {
+  background: number
   title: string
   firstPrompt: string
   currentTask: string

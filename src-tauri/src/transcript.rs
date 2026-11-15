@@ -11,6 +11,7 @@ use std::fs::{self, File};
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
+use crate::background::Background;
 use crate::steps::{self, Step};
 
 const MAX_EVENTS: usize = 6000;
@@ -129,6 +130,8 @@ pub struct Stats {
     /// Stand der letzten `cost-state`-Zeile, die Claude Code selbst berechnet hat.
     pub cost: Option<Cost>,
     pub file_bytes: u64,
+    /// Shells, agents and skills of the main session still running in the background
+    pub background: u32,
 }
 
 #[derive(Default)]
@@ -139,7 +142,9 @@ pub struct Transcript {
     /// Nutzung je API-Antwort: Claude Code schreibt pro Inhaltsblock eine Zeile mit derselben Message-ID.
     usage_by_message: HashMap<String, (String, [u64; 4])>,
     tool_names: HashMap<String, String>,
+    /// By tool use id, and for background agents also by their agent id
     agent_index: HashMap<String, usize>,
+    background: Background,
     max_context: u64,
 }
 
@@ -334,6 +339,9 @@ impl Transcript {
             });
         }
         self.tool_names.insert(id.clone(), name.clone());
+        if !sidechain {
+            self.background.tool_use(&id, &name, input);
+        }
 
         s.steps.push(Step::tool(t, &name, &id, input, sidechain));
         match steps::summary(input) {
@@ -366,12 +374,20 @@ impl Transcript {
             let source = self.tool_names.get(id).cloned().unwrap_or_else(|| "Tool".into());
             self.error(t, source, steps::text_of(&b["content"]), sidechain);
         }
+        let result = &v["toolUseResult"];
+        if !sidechain {
+            self.background.tool_result(id, result);
+            self.stats.background = self.background.count();
+        }
         if let Some(&i) = self.agent_index.get(id) {
-            let result = &v["toolUseResult"];
             let agent = &mut self.stats.agents[i];
             set_if_present(&mut agent.model, &result["resolvedModel"]);
             if result["status"] == "async_launched" {
                 agent.background = true;
+                // Newer completion notices name only the agent id, no tool use id
+                if let Some(agent_id) = result["agentId"].as_str() {
+                    self.agent_index.insert(agent_id.to_string(), i);
+                }
             } else {
                 agent.finished = Some(t);
                 agent.status = if failed { "failed" } else { "done" }.into();
@@ -385,23 +401,25 @@ impl Transcript {
     /// never shows up as a user message as well.
     fn attachment(&mut self, v: &Value, t: i64) {
         let a = &v["attachment"];
-        if a["type"] != "queued_command" || v["isSidechain"].as_bool() == Some(true) {
+        if a["type"] != "queued_command" {
             return;
         }
         let prompt = &a["prompt"];
         let Some(text) = prompt.as_str().or_else(|| first_text(prompt)) else { return };
+        let sidechain = v["isSidechain"].as_bool() == Some(true);
         if text.trim_start().starts_with(TASK_NOTIFICATION) {
             self.task_notification(text.trim_start(), t);
-        } else if a["origin"]["kind"] == "human" {
+        } else if a["origin"]["kind"] == "human" && !sidechain {
             self.user_text(text, v, t);
         }
     }
 
     fn task_notification(&mut self, text: &str, t: i64) {
-        let (Some(id), Some(status)) = (between(text, "<tool-use-id>", "</tool-use-id>"), between(text, "<status>", "</status>")) else {
-            return;
-        };
-        let Some(&i) = self.agent_index.get(id) else { return };
+        let Some(status) = between(text, "<status>", "</status>") else { return };
+        let (task_id, tool_use_id) = (between(text, "<task-id>", "</task-id>"), between(text, "<tool-use-id>", "</tool-use-id>"));
+        self.background.finished(task_id, tool_use_id);
+        self.stats.background = self.background.count();
+        let Some(&i) = [tool_use_id, task_id].into_iter().flatten().find_map(|id| self.agent_index.get(id)) else { return };
         let agent = &mut self.stats.agents[i];
         agent.finished = Some(t);
         agent.status = match status {
@@ -644,6 +662,34 @@ mod tests {
         assert_eq!(t.stats.current_task, "Hier ist es nicht breit genug, das Degree ragt darüber hinaus");
         t.ingest(&lines(&[queued(json!("und den Löschdialog bitte auch gleich reparieren"))]));
         assert_eq!(t.stats.current_task, "Und den Löschdialog bitte auch gleich reparieren");
+    }
+
+    #[test]
+    fn background_agent_finishes_by_its_agent_id_alone() {
+        let notice = |prompt: &str, sidechain: bool| {
+            json!({"isSidechain": sidechain, "type": "attachment", "timestamp": "2026-11-15T16:07:05Z",
+                "attachment": {"type": "queued_command", "origin": {"kind": "task-notification"}, "prompt": prompt}})
+        };
+        let mut t = Transcript::default();
+        t.ingest(&lines(&[
+            assistant("m1", "2026-11-15T15:55:00Z", json!([
+                {"type": "tool_use", "id": "a1", "name": "Agent", "input": {"description": "Fix unit overflow in Forge", "run_in_background": true}},
+                {"type": "tool_use", "id": "s1", "name": "PowerShell", "input": {"command": "npm run build", "run_in_background": true}},
+                {"type": "tool_use", "id": "s2", "name": "Bash", "input": {"command": "npm run dev", "run_in_background": true}},
+            ]), 7),
+            json!({"type": "user", "timestamp": "2026-11-15T15:55:01Z", "toolUseResult": {"status": "async_launched", "agentId": "af62"},
+                "message": {"content": [{"type": "tool_result", "tool_use_id": "a1", "content": "gestartet"}]}}),
+            json!({"type": "user", "timestamp": "2026-11-15T15:55:02Z", "toolUseResult": {"backgroundTaskId": "bjq2"},
+                "message": {"content": [{"type": "tool_result", "tool_use_id": "s1", "content": "läuft"}]}}),
+            json!({"type": "user", "timestamp": "2026-11-15T15:55:03Z", "toolUseResult": {"backgroundTaskId": "bdev"},
+                "message": {"content": [{"type": "tool_result", "tool_use_id": "s2", "content": "läuft"}]}}),
+        ]));
+        assert_eq!(t.stats.background, 2);
+        t.ingest(&lines(&[
+            notice("<task-notification>\n<task-id>af62</task-id>\n<status>completed</status>\n</task-notification>", false),
+            notice("<task-notification>\n<task-id>bjq2</task-id>\n<tool-use-id>s1</tool-use-id>\n<status>completed</status>\n</task-notification>", true),
+        ]));
+        assert_eq!((t.stats.agents[0].status.as_str(), t.stats.background), ("done", 0));
     }
 
     #[test]

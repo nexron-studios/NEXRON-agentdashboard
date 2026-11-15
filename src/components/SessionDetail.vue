@@ -114,7 +114,7 @@ const errors = computed(() => [...(s.value?.errors ?? [])].reverse().slice(0, 40
     <template v-if="s && detail">
       <header class="enter" style="--i: 0">
         <div class="flex flex-wrap items-center gap-3">
-          <StatusBadge :status="status" :fresh="!s.prompts" :note="detail.live?.note ?? undefined" />
+          <StatusBadge :status="status" :fresh="!s.prompts" :note="detail.live?.note ?? undefined" :background="s.background" />
           <SessionMeta size="lg" :herdr="detail.herdr" :account="detail.account" :entrypoint="detail.live?.entrypoint ?? ''" :name="detail.live?.name ?? ''" />
           <SessionOpen
             v-if="detail.live"

@@ -1,3 +1,4 @@
+mod background;
 mod favicon;
 mod herdr;
 mod herdr_follow;
@@ -82,6 +83,8 @@ struct SessionRow {
     agents: Vec<AgentRun>,
     agents_total: usize,
     agents_running: usize,
+    /// Background work Claude still waits for, see `background.rs`
+    background: u32,
 }
 
 #[derive(Serialize)]
@@ -226,14 +229,20 @@ impl AppState {
 /// `sessions/<pid>.json` (das z. B. nach einem Befehl noch „shell“ meldet, obwohl Claude fertig ist).
 /// Ausnahme: Hat Claude Code selbst „idle“ geschrieben, ist der Zug sicher vorbei. herdr bleibt
 /// manchmal auf „working“ hängen, dann stünde die Karte ewig auf „Arbeitet“.
-fn status(live: Option<&LiveSession>, herdr: Option<&HerdrPlace>) -> String {
+fn status(live: Option<&LiveSession>, herdr: Option<&HerdrPlace>, stats: &Stats) -> String {
     let Some(live) = live else { return "ended".into() };
-    match herdr.map(|h| h.status.as_str()) {
+    let status: String = match herdr.map(|h| h.status.as_str()) {
         Some("working") if live.status.as_deref() == Some("idle") => "idle".into(),
         Some("working") => "busy".into(),
         Some(s @ ("blocked" | "idle" | "done")) => s.into(),
         _ => live.status.clone().unwrap_or_else(|| "idle".into()),
+    };
+    // Claude's turn is over, but it still waits for a build, an agent or a review it started
+    let turn_over = matches!(status.as_str(), "idle" | "done");
+    if turn_over && stats.background > 0 {
+        return "background".into();
     }
+    status
 }
 
 /// Der Statuswechsel auf „idle“ ist der genaue Zeitpunkt, an dem Claude fertig wurde. Meldet die
@@ -268,7 +277,7 @@ fn card_agents(stats: &Stats) -> Vec<AgentRun> {
 fn row(stats: &Stats, session_id: String, account: String, live: Option<&LiveSession>, herdr: Option<HerdrPlace>) -> SessionRow {
     SessionRow {
         live: live.is_some(),
-        status: status(live, herdr.as_ref()),
+        status: status(live, herdr.as_ref(), stats),
         note: live.and_then(|l| l.note.clone()).unwrap_or_default(),
         name: live.and_then(|l| l.name.clone()).unwrap_or_default(),
         pid: live.map(|l| l.pid),
@@ -295,6 +304,7 @@ fn row(stats: &Stats, session_id: String, account: String, live: Option<&LiveSes
         agents: card_agents(stats),
         agents_total: stats.agents.len(),
         agents_running: stats.agents.iter().filter(|a| a.status == "running").count(),
+        background: stats.background,
     }
 }
 
@@ -472,7 +482,7 @@ async fn session_detail(session_id: String, machine: Option<String>, state: taur
     let found = sessions::find_transcript_any(&profiles, &session_id);
     let account = live.as_ref().map(|l| l.account.clone()).or_else(|| found.as_ref().map(|f| f.1.clone())).unwrap_or_default();
     let stats = state.full(&session_id, || found.map(|f| f.0), Stats::clone)?;
-    let status = status(live.as_ref(), herdr.as_ref());
+    let status = status(live.as_ref(), herdr.as_ref(), &stats);
     let topic = state.topics.cached(&session_id, &stats);
     let title_pending = live.is_some() && title_pending(&stats, &topic, &state.topics, &session_id);
     Ok(Detail { session_id, live, status, account, herdr, topic, title_pending, stats })
@@ -494,7 +504,7 @@ fn remote_detail(state: &AppState, r: &remote::Remote, session_id: String) -> Re
         .unwrap_or_default();
     let path = r.full_path(&session_id);
     let stats = state.full(&session_id, || path.is_file().then_some(path.clone()), Stats::clone)?;
-    let status = status(live.as_ref(), herdr.as_ref());
+    let status = status(live.as_ref(), herdr.as_ref(), &stats);
     let topic = state.topics.cached(&session_id, &stats);
     let title_pending = live.is_some() && title_pending(&stats, &topic, &state.topics, &session_id);
     Ok(Detail { session_id, live, status, account, herdr, topic, title_pending, stats })

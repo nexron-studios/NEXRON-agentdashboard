@@ -152,11 +152,11 @@ pub fn navigator_rows(snap: &Value) -> Vec<Option<String>> {
     rows
 }
 
-/// Was `herdr_follow` von einem Server braucht
+/// What `herdr_follow` needs from one herdr server
 #[derive(Default, Clone)]
 pub struct Navigator {
     pub rows: Vec<Option<String>>,
-    /// herdr schreibt den Namen des gewählten Workspace in den Fenstertitel, daran erkennt WezTerm das herdr-Terminal
+    /// herdr writes the selected workspace into the window title, which is how wezterm.rs finds it
     pub workspaces: Vec<String>,
 }
 
@@ -168,7 +168,7 @@ pub fn navigator(snap: &Value) -> Navigator {
     }
 }
 
-/// Navigator des herdr-Servers auf diesem Rechner; `None`, wenn herdr nicht läuft
+/// Navigator of the herdr server on this computer; `None` when herdr is not running
 pub fn local_navigator() -> Option<Navigator> {
     call(&["api", "snapshot"]).map(|v| navigator(&v["snapshot"]))
 }

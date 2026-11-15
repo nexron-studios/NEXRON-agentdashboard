@@ -523,7 +523,7 @@ async fn focus_herdr(tab_id: String, pane_id: String, machine: Option<String>, s
     herdr::focus_tab(remote.as_deref(), &tab_id)
 }
 
-/// Der herdr-Client in Ghostty bzw. WezTerm wechselt auf dieselbe Machine wie der Umschalter im Dashboard.
+/// The herdr client in Ghostty or WezTerm switches to the machine picked in the dashboard.
 #[tauri::command]
 async fn follow_in_herdr(machine: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
     if herdr_shows(Some(&machine)) {

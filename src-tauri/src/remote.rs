@@ -48,7 +48,7 @@ pub struct View {
     pub recent: Vec<RemoteRecent>,
     /// Nach Session-ID, denn PIDs der Machine lassen sich hier nicht abgleichen
     pub places: HashMap<String, HerdrPlace>,
-    /// Navigator-Zeilen und Workspaces dieser Machine, für `herdr_follow`
+    /// Navigator rows and workspaces of this machine, for `herdr_follow`
     pub navigator: herdr::Navigator,
 }
 

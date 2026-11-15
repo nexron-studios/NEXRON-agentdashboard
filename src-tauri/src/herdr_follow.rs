@@ -1,5 +1,5 @@
-//! herdr in Ghostty (Mac) bzw. WezTerm (Windows, wezterm.rs) folgt dem Machine-Umschalter und
-//! „Zum Chat“ auf anderen Machines.
+//! herdr in Ghostty (Mac) or WezTerm (Windows, wezterm.rs) follows the machine switcher and
+//! „Zum Chat“ on other machines.
 //!
 //! herdr 0.9 hat keinen Befehl, der die gewählte Machine eines offenen Clients wechselt: Socket-API
 //! und CLI (`--machine`) routen nur Befehle an einen Server, die Auswahl lebt im Client. Der einzige
@@ -27,7 +27,7 @@ const PAGE_ROWS: usize = 8;
 pub struct Target {
     pub row: usize,
     pub total_rows: usize,
-    /// Workspace-Namen aller Machines, für die Suche nach dem herdr-Terminal in WezTerm
+    /// Workspace names of all machines, to find the herdr terminal in WezTerm by its title
     pub workspaces: Vec<String>,
 }
 
@@ -41,7 +41,7 @@ fn keys(target: &Target) -> Vec<&'static str> {
     keys
 }
 
-/// Ghosttys `text:`-Aktion liest Escapes wie `\x02`; AppleScript selbst kennt keine Steuerzeichen.
+/// Ghostty's `text:` action reads escapes like `\x02`; AppleScript itself has no control characters.
 #[cfg(target_os = "macos")]
 fn ghostty_text(key: &str) -> String {
     key.chars().map(|c| if c.is_ascii_control() { format!("\\x{:02x}", c as u8) } else { c.to_string() }).collect()
@@ -160,11 +160,11 @@ pub fn send(target: &Target) -> Result<usize, String> {
     Ok(terminals.len())
 }
 
-/// Tippt die Tasten in jeden herdr-Client in WezTerm und gibt zurück, in wie viele.
+/// Types the keys into every herdr client in WezTerm and returns how many there were.
 #[cfg(windows)]
 pub fn send(target: &Target) -> Result<usize, String> {
     let keys = keys(target);
-    let panes = crate::wezterm::herdr_panes(&target.workspaces);
+    let panes = crate::wezterm::herdr_panes(&target.workspaces)?;
     for pane in &panes {
         crate::wezterm::type_keys(pane, &keys)?;
     }

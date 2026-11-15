@@ -11,7 +11,7 @@
     "app:dev": "tauri dev",
     "app:build": "tauri build",
     "typecheck": "vue-tsc --noEmit",
-    "test": "cargo test --manifest-path src-tauri/Cargo.toml && python tui/test_agentdashboard.py"
+    "test": "cargo test --manifest-path src-tauri/Cargo.toml && cargo test --manifest-path agentd/Cargo.toml --features fake-claude && python tui/test_agentdashboard.py"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.0",

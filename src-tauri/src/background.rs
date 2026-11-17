@@ -6,6 +6,8 @@
 //! `async_launched` or `background` for agents and skills). It ends with a `<task-notification>`
 //! that names the task id, and for shells also the tool use id. A task whose Claude process was
 //! restarted or resumed never gets one; the caller drops launches older than the running process.
+//! A task Claude stops itself (`TaskStop`, formerly `KillShell`) gets no notice either, so the stop's
+//! own tool result ends it (Jonas, 17.11.2026: "Wartet" stayed for hours after a stopped shell).
 //!
 //! Dev servers never end, so a shell whose command looks like one does not count (Jonas, 15.11.2026).
 
@@ -14,6 +16,7 @@ use std::collections::HashMap;
 
 const TRACKED_TOOLS: [&str; 5] = ["Bash", "PowerShell", "Agent", "Task", "Skill"];
 const SHELL_TOOLS: [&str; 2] = ["Bash", "PowerShell"];
+const STOP_TOOLS: [&str; 2] = ["TaskStop", "KillShell"];
 /// A word that runs a project script or tool, followed by one of `SERVER_SCRIPTS`: `npm run dev`, `next dev`
 const SCRIPT_RUNNERS: [&str; 9] = ["run", "pnpm", "yarn", "bun", "npx", "tauri", "next", "nuxt", "astro"];
 const SERVER_SCRIPTS: [&str; 5] = ["dev", "serve", "preview", "start", "watch"];
@@ -50,11 +53,17 @@ pub struct Background {
     candidates: HashMap<String, i64>,
     /// Task ids still running: the tool use that started them and when
     running: HashMap<String, (String, i64)>,
+    /// Tool uses that stop a task, with their start time
+    stops: HashMap<String, i64>,
     ended_at: i64,
 }
 
 impl Background {
     pub fn tool_use(&mut self, id: &str, name: &str, input: &Value, t: i64) {
+        if STOP_TOOLS.contains(&name) {
+            self.stops.insert(id.to_string(), t);
+            return;
+        }
         if !TRACKED_TOOLS.contains(&name) {
             return;
         }
@@ -67,6 +76,12 @@ impl Background {
 
     /// The tool result of `tool_use_id` arrived; `result` is the line's `toolUseResult`.
     pub fn tool_result(&mut self, tool_use_id: &str, result: &Value) {
+        if let Some(t) = self.stops.remove(tool_use_id) {
+            // A failed stop has a plain text result without the id, so the task keeps running
+            let stopped = result["task_id"].as_str().or_else(|| result["shell_id"].as_str());
+            self.finished(stopped, None, t);
+            return;
+        }
         let Some(t) = self.candidates.remove(tool_use_id) else { return };
         let agent_in_background = result["status"] == "async_launched" || result["background"] == true;
         let task = result["backgroundTaskId"].as_str().or_else(|| result["agentId"].as_str().filter(|_| agent_in_background));
@@ -129,6 +144,28 @@ mod tests {
         bg.finished(Some("bjq2s7vtt"), Some("t1"), 10);
         bg.finished(Some("af6259e0d6cf70662"), None, 20);
         assert_eq!((bg.launches(), bg.ended_at()), (vec![3], 20));
+    }
+
+    #[test]
+    fn a_task_stopped_by_claude_ends_without_a_notification() {
+        let mut bg = Background::default();
+        bg.tool_use("t1", "Bash", &json!({"command": "python3 design.py", "run_in_background": true}), 1);
+        bg.tool_use("t2", "Bash", &json!({"command": "npm run build", "run_in_background": true}), 2);
+        bg.tool_result("t1", &json!({"backgroundTaskId": "b9hiqdqyq", "timedOutAfterMs": 300000}));
+        bg.tool_result("t2", &json!({"backgroundTaskId": "bbuild"}));
+        bg.tool_use("s1", "TaskStop", &json!({"task_id": "b9hiqdqyq"}), 5);
+        bg.tool_result("s1", &json!({"message": "Successfully stopped task: b9hiqdqyq", "task_id": "b9hiqdqyq"}));
+        assert_eq!((bg.launches(), bg.ended_at()), (vec![2], 5));
+    }
+
+    #[test]
+    fn a_failed_stop_keeps_the_task_running() {
+        let mut bg = Background::default();
+        bg.tool_use("t1", "Bash", &json!({"command": "npm run build", "run_in_background": true}), 1);
+        bg.tool_result("t1", &json!({"backgroundTaskId": "b1"}));
+        bg.tool_use("s1", "TaskStop", &json!({"task_id": "b1"}), 5);
+        bg.tool_result("s1", &json!("No task found with ID: b1"));
+        assert_eq!((bg.launches(), bg.ended_at()), (vec![1], 0));
     }
 
     #[test]

@@ -1,7 +1,7 @@
 //! „Öffnen“ für Sessions ohne herdr: holt das Fenster nach vorne, in dem der Claude-Prozess läuft.
 //! Von der PID aus geht es die Elternprozesse hoch (claude → Shell → Windows Terminal …), bis einer
 //! ein sichtbares Hauptfenster hat. Den genauen Tab im Terminal kann Windows nicht auswählen.
-//! Auf dem Mac wird die App nach vorne geholt, zu der der erste Vorfahr gehört.
+//! On macOS the app of the first ancestor inside an app bundle comes to the front.
 
 #[cfg(windows)]
 pub fn focus_process_window(pid: u32) -> Result<(), String> {
@@ -122,11 +122,14 @@ pub fn focus_process_window(pid: u32) -> Result<(), String> {
         .args(["-axo", "pid=,ppid=,comm="])
         .output()
         .map_err(|e| format!("Prozessliste ließ sich nicht lesen: {e}"))?;
+    if !output.status.success() {
+        return Err("Prozessliste ließ sich nicht lesen".into());
+    }
     let procs = parse_process_list(&String::from_utf8_lossy(&output.stdout));
     if !procs.contains_key(&pid) {
         return Err("Die Session läuft nicht mehr".into());
     }
-    let bundle = ancestor_app_bundle(pid, &procs).ok_or("Kein Programmfenster zu dieser Session gefunden")?;
+    let bundle = ancestor_app_bundle(pid, &procs).ok_or("Keine App zu dieser Session gefunden (läuft sie in tmux?)")?;
     let status = std::process::Command::new("open")
         .arg(&bundle)
         .status()
@@ -139,7 +142,7 @@ pub fn focus_process_window(pid: u32) -> Result<(), String> {
 
 #[cfg(not(any(windows, target_os = "macos")))]
 pub fn focus_process_window(_pid: u32) -> Result<(), String> {
-    Err("Fenster nach vorne holen geht hier nicht".into())
+    Err("Fenster nach vorne holen geht bisher nur unter Windows und macOS".into())
 }
 
 /// `ps -axo pid=,ppid=,comm=` → PID → (parent PID, executable path). The path may contain spaces.
@@ -158,9 +161,11 @@ fn parse_process_list(text: &str) -> std::collections::HashMap<u32, (u32, String
 
 /// Outermost `.app` bundle of an executable path, so a helper such as
 /// `Visual Studio Code.app/Contents/Frameworks/Code Helper.app/…` still opens VS Code itself.
+/// Bundles that live inside a framework are system helpers, not apps with a window.
 #[cfg(any(target_os = "macos", test))]
 fn app_bundle_of(executable: &str) -> Option<&str> {
-    executable.find(".app/Contents/").map(|end| &executable[..end + ".app".len()])
+    let bundle = &executable[..executable.find(".app/Contents/")? + ".app".len()];
+    (!bundle.contains(".framework/")).then_some(bundle)
 }
 
 /// Starts at the parent: the desktop app ships the claude binary itself inside a `claude.app` bundle.
@@ -214,6 +219,11 @@ mod tests {
     fn helper_process_resolves_to_the_outer_app() {
         let procs = parse_process_list(PS_OUTPUT);
         assert_eq!(ancestor_app_bundle(70001, &procs).as_deref(), Some("/Applications/Visual Studio Code.app"));
+    }
+
+    #[test]
+    fn bundle_inside_a_framework_is_no_app() {
+        assert_eq!(app_bundle_of("/System/Library/PrivateFrameworks/IDS.framework/identityservicesd.app/Contents/MacOS/identityservicesd"), None);
     }
 
     #[test]

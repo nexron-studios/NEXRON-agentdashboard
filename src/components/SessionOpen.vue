@@ -22,7 +22,7 @@ const hint = computed(() =>
         ? 'VS-Code-Fenster mit diesem Projekt in den Vordergrund holen'
         : props.entrypoint === 'claude-desktop'
           ? 'Claude-App in den Vordergrund holen'
-          : 'Terminal-Fenster dieser Session in den Vordergrund holen',
+          : 'Terminal dieser Session in den Vordergrund holen',
 )
 
 async function open() {

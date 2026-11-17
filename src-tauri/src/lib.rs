@@ -681,7 +681,11 @@ async fn open_session(pid: Option<u32>, cwd: String, entrypoint: String) -> Resu
             }
         }
     }
-    window::focus_process_window(pid.ok_or("Keine Prozess-ID für diese Session")?)
+    let pid = pid.ok_or("Keine Prozess-ID für diese Session")?;
+    // `ps` and `open` block until LaunchServices answers, seconds for an app that is not running yet.
+    tauri::async_runtime::spawn_blocking(move || window::focus_process_window(pid))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 /// Breite (logische px), ab der die Oberfläche in Originalgröße erscheint: drei Kartenspalten

@@ -20,7 +20,9 @@ const hint = computed(() =>
       ? `Läuft auf ${machine.value?.label} ohne herdr-Tab, von hier aus nicht erreichbar`
       : props.entrypoint === 'claude-vscode'
         ? 'VS-Code-Fenster mit diesem Projekt in den Vordergrund holen'
-        : 'Terminal-Fenster dieser Session in den Vordergrund holen',
+        : props.entrypoint === 'claude-desktop'
+          ? 'Claude-App in den Vordergrund holen'
+          : 'Terminal-Fenster dieser Session in den Vordergrund holen',
 )
 
 async function open() {

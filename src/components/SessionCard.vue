@@ -82,10 +82,10 @@ const tool = computed(() => toolKind(action.value.tool))
           :title="s.herdr ? `herdr: Workspace „${s.herdr.workspace}“, Tab „${s.herdr.tab}“` : 'Name aus der Claude-Session (nicht in herdr gefunden)'"
         >
           <component :is="s.herdr ? LayoutPanelTop : SquareTerminal" :size="15" :stroke-width="2" class="shrink-0 text-ink-3" />
-          <span class="truncate">
-            <span v-if="s.herdr?.workspace" class="text-ink-3">{{ s.herdr.workspace }} › </span>
-            <span class="font-semibold text-ink">{{ s.herdr?.tab || s.name || 'Session' }}</span>
-          </span>
+          <!-- Der Workspace ist meist überall gleich und weicht zuerst, der Tab-Name bleibt lesbar -->
+          <span v-if="s.herdr?.workspace" class="min-w-0 shrink-[100] truncate text-ink-3">{{ s.herdr.workspace }}</span>
+          <span v-if="s.herdr?.workspace" class="shrink-0 text-ink-3" aria-hidden="true">›</span>
+          <span class="truncate font-semibold text-ink">{{ s.herdr?.tab || s.name || 'Session' }}</span>
         </span>
         <!-- herdr-Tabs heißen oft gleich („claude“); der Session-Name aus Claude Code ist eindeutig -->
         <span

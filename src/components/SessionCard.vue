@@ -76,7 +76,7 @@ const tool = computed(() => toolKind(action.value.tool))
   >
     <div class="flex items-center gap-3">
       <div class="flex min-w-0 flex-1 items-center gap-2.5 text-[14px]">
-        <!-- Der Name schrumpft zuletzt: erst wird der Account gekürzt, dann der Name, nie läuft er unter den Status -->
+        <!-- Der Name schrumpft, bevor er unter den Status läuft -->
         <span
           class="flex min-w-0 items-center gap-1.5"
           :title="s.herdr ? `herdr: Workspace „${s.herdr.workspace}“, Tab „${s.herdr.tab}“` : 'Name aus der Claude-Session (nicht in herdr gefunden)'"
@@ -86,15 +86,6 @@ const tool = computed(() => toolKind(action.value.tool))
           <span v-if="s.herdr?.workspace" class="min-w-0 shrink-[100] truncate text-ink-3">{{ s.herdr.workspace }}</span>
           <span v-if="s.herdr?.workspace" class="shrink-0 text-ink-3" aria-hidden="true">›</span>
           <span class="truncate font-semibold text-ink">{{ s.herdr?.tab || s.name || 'Session' }}</span>
-        </span>
-        <!-- herdr-Tabs heißen oft gleich („claude“); der Session-Name aus Claude Code ist eindeutig -->
-        <span
-          v-if="s.herdr?.tab && s.name && s.name !== s.herdr.tab"
-          class="shrink-0 rounded-md bg-surface-2 px-1.5 py-px font-mono text-[12px] text-ink-2"
-          :title="`Session-Name in Claude Code: ${s.name}`"
-        >{{ s.name }}</span>
-        <span v-if="s.account" class="flex min-w-0 shrink-[100] items-center gap-1 text-[13px] text-ink-3" :title="acc.email ? `Claude-Account: ${acc.email}` : 'Claude-Profil'">
-          <UserRound :size="13" :stroke-width="2" class="shrink-0" :style="{ color: acc.color }" /> <span class="truncate">{{ s.account }}</span>
         </span>
         <span v-if="s.entrypoint === 'claude-vscode'" class="flex min-w-0 items-center gap-1 text-[13px] text-ink-3" title="Läuft in VS Code">
           <Code :size="13" :stroke-width="2" class="shrink-0" /> <span class="truncate">VS Code</span>
@@ -213,6 +204,20 @@ const tool = computed(() => toolKind(action.value.tool))
 
     <div class="mt-auto flex items-center gap-2 pt-5">
       <FolderLink :path="s.cwd" class="min-w-0" />
+      <!-- Unten statt in der Kopfzeile: Dort ist neben Tab und Status zu wenig Platz.
+           herdr-Tabs heißen oft gleich („claude“); der Session-Name aus Claude Code ist eindeutig. -->
+      <span
+        v-if="s.herdr?.tab && s.name && s.name !== s.herdr.tab"
+        class="shrink-0 rounded-lg border border-line px-2 py-[5px] font-mono text-[12px] text-ink-2"
+        :title="`Session-Name in Claude Code: ${s.name}`"
+      >{{ s.name }}</span>
+      <span
+        v-if="s.account"
+        class="flex min-w-0 shrink-[100] items-center gap-1.5 rounded-lg border border-line px-2 py-[5px] text-[13px] text-ink-2"
+        :title="acc.email ? `Claude-Account: ${acc.email}` : 'Claude-Profil'"
+      >
+        <UserRound :size="14" :stroke-width="1.75" class="shrink-0" :style="{ color: acc.color }" /> <span class="truncate">{{ s.account }}</span>
+      </span>
       <div v-if="s.live" class="ml-auto flex shrink-0 items-center gap-2">
         <SessionClear v-if="s.herdr" :herdr="s.herdr" :session-id="s.sessionId" :status="s.status" />
         <SessionOpen :herdr="s.herdr" :pid="s.pid" :cwd="s.cwd" :entrypoint="s.entrypoint" />

@@ -25,16 +25,25 @@ $stdout = [Console]::OpenStandardOutput()
 # processes it was started from (the shell, sshd's per-connection processes) and ends once one is gone.
 $procs = @{}
 foreach ($p in Get-CimInstance Win32_Process -Property ProcessId, ParentProcessId, CreationDate) { $procs[[int]$p.ProcessId] = $p }
-$ancestors = @()
+$ancestors = @{}
 $child = $procs[$PID]
 while ($child) {
   $parent = $procs[[int]$child.ParentProcessId]
   # A parent younger than its child is an unrelated process that got the PID of an exited one
   if (-not $parent -or $parent.ProcessId -eq $child.ProcessId -or $parent.CreationDate -gt $child.CreationDate) { break }
-  $ancestors += [int]$parent.ProcessId
+  $ancestors[[int]$parent.ProcessId] = $parent.CreationDate
   $child = $parent
 }
-function Test-SessionGone { @(Get-Process -Id $ancestors).Count -lt $ancestors.Count }
+
+function Test-SessionGone {
+  foreach ($id in $ancestors.Keys) {
+    $p = Get-Process -Id $id
+    if (-not $p) { return $true }
+    # Same PID, other process: the start time differs (CIM rounds it to microseconds)
+    if ($p.StartTime -and [Math]::Abs(($p.StartTime - $ancestors[$id]).TotalSeconds) -ge 1) { return $true }
+  }
+  $false
+}
 
 # Bytes the dashboard already has: full mirrors by offset, tails by the file length they were cut from
 $sent = @{}
@@ -172,7 +181,7 @@ while (-not (Test-SessionGone)) {
     $stdout.Write($header, 0, $header.Length)
     $stdout.Write($bytes, 0, $bytes.Length)
     $stdout.Flush()
-  } catch { break }   # the dashboard closed the connection
+  } catch { break }   # a pipe error that does surface; a dropped session is caught by Test-SessionGone
   $rest = $cfg.intervalMs - ((Get-Date) - $started).TotalMilliseconds
   if ($rest -gt 0) { Start-Sleep -Milliseconds $rest }
 }

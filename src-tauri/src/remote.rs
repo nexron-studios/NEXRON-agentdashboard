@@ -508,6 +508,7 @@ mod tests {
     #[test]
     #[ignore]
     fn probe_ends_when_its_session_is_gone() {
+        const FIRST_FRAME_WITHIN: Duration = Duration::from_secs(30);
         const EXIT_WITHIN: Duration = Duration::from_secs(30);
         let shell_args = format!("-c \"{}\"", sync_command(&HashMap::new()));
         let mut sshd = Command::new("powershell")
@@ -518,19 +519,36 @@ mod tests {
             .stderr(Stdio::null())
             .spawn()
             .unwrap();
-        let mut out = BufReader::new(sshd.stdout.take().unwrap());
-        let mut header = String::new();
-        out.read_line(&mut header).unwrap();
-        assert!(header.trim().parse::<usize>().is_ok(), "no frame: {header:?}");
+        let sshd_pid = sshd.id();
+        let out = sshd.stdout.take().unwrap();
+        let (header_tx, header_rx) = std::sync::mpsc::channel();
+        let (eof_tx, eof_rx) = std::sync::mpsc::channel();
+        // The shell and the probe inherited this pipe: it reaches EOF only once both have exited
+        std::thread::spawn(move || {
+            let mut out = BufReader::new(out);
+            let mut header = String::new();
+            let _ = out.read_line(&mut header);
+            let _ = header_tx.send(header);
+            let _ = std::io::copy(&mut out, &mut std::io::sink());
+            let _ = eof_tx.send(());
+        });
+        let header = header_rx.recv_timeout(FIRST_FRAME_WITHIN);
 
         sshd.kill().unwrap();
         sshd.wait().unwrap();
-        // The shell and the probe inherited this pipe: it reaches EOF only once both have exited
-        let (tx, rx) = std::sync::mpsc::channel();
-        std::thread::spawn(move || {
-            let _ = std::io::copy(&mut out, &mut std::io::sink());
-            let _ = tx.send(());
-        });
-        assert!(rx.recv_timeout(EXIT_WITHIN).is_ok(), "probe still running {EXIT_WITHIN:?} after its session ended");
+        let exited = eof_rx.recv_timeout(EXIT_WITHIN).is_ok();
+        if !exited {
+            kill_children_of(sshd_pid);
+        }
+        assert!(header.as_deref().is_ok_and(|h| h.trim().parse::<usize>().is_ok()), "no frame: {header:?}");
+        assert!(exited, "probe still running {EXIT_WITHIN:?} after its session ended");
+    }
+
+    /// A failed run must not leave a probe polling on the developer's machine
+    #[cfg(windows)]
+    fn kill_children_of(pid: u32) {
+        let script = format!("Get-CimInstance Win32_Process -Filter 'ParentProcessId={pid}' | ForEach-Object {{ taskkill /F /T /PID $_.ProcessId }}");
+        // Best effort: the assertion that follows reports the failure either way
+        let _ = Command::new("powershell").args(["-NoProfile", "-Command", &script]).output();
     }
 }

@@ -21,7 +21,11 @@ const lg = computed(() => props.size === 'lg')
       <span v-if="herdr.workspace" class="font-medium text-ink-2">{{ herdr.workspace }} ›</span>
       {{ herdr.tab }}
     </span>
-    <span v-else-if="name" class="flex items-center gap-1.5 rounded-md px-1 py-0.5 font-mono text-[12px] text-ink-3" title="Name aus der Claude-Session (nicht in herdr gefunden)">
+    <span
+      v-if="name"
+      class="flex items-center gap-1.5 rounded-md px-1 py-0.5 font-mono text-[12px] text-ink-3"
+      :title="herdr ? `Session-Name in Claude Code: ${name}` : 'Name aus der Claude-Session (nicht in herdr gefunden)'"
+    >
       <SquareTerminal :size="14" :stroke-width="1.75" /> {{ name }}
     </span>
 

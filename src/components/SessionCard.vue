@@ -87,6 +87,12 @@ const tool = computed(() => toolKind(action.value.tool))
             <span class="font-semibold text-ink">{{ s.herdr?.tab || s.name || 'Session' }}</span>
           </span>
         </span>
+        <!-- herdr-Tabs heißen oft gleich („claude“); der Session-Name aus Claude Code ist eindeutig -->
+        <span
+          v-if="s.herdr && s.name"
+          class="shrink-0 rounded-md bg-surface-2 px-1.5 py-px font-mono text-[12px] text-ink-2"
+          :title="`Session-Name in Claude Code: ${s.name}`"
+        >{{ s.name }}</span>
         <span v-if="s.account" class="flex min-w-0 shrink-[100] items-center gap-1 text-[13px] text-ink-3" :title="acc.email ? `Claude-Account: ${acc.email}` : 'Claude-Profil'">
           <UserRound :size="13" :stroke-width="2" class="shrink-0" :style="{ color: acc.color }" /> <span class="truncate">{{ s.account }}</span>
         </span>

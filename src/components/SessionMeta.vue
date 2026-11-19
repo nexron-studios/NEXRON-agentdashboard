@@ -22,7 +22,7 @@ const lg = computed(() => props.size === 'lg')
       {{ herdr.tab }}
     </span>
     <span
-      v-if="name"
+      v-if="name && name !== herdr?.tab"
       class="flex items-center gap-1.5 rounded-md px-1 py-0.5 font-mono text-[12px] text-ink-3"
       :title="herdr ? `Session-Name in Claude Code: ${name}` : 'Name aus der Claude-Session (nicht in herdr gefunden)'"
     >

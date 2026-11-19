@@ -89,7 +89,7 @@ const tool = computed(() => toolKind(action.value.tool))
         </span>
         <!-- herdr-Tabs heißen oft gleich („claude“); der Session-Name aus Claude Code ist eindeutig -->
         <span
-          v-if="s.herdr && s.name"
+          v-if="s.herdr?.tab && s.name && s.name !== s.herdr.tab"
           class="shrink-0 rounded-md bg-surface-2 px-1.5 py-px font-mono text-[12px] text-ink-2"
           :title="`Session-Name in Claude Code: ${s.name}`"
         >{{ s.name }}</span>

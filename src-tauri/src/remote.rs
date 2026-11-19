@@ -246,23 +246,8 @@ impl Remote {
     /// Eine Verbindung bis zu ihrem Ende. Bricht ab, wenn ein Stück nicht an den Spiegel passt;
     /// die nächste Verbindung startet dann mit den tatsächlichen Spiegelgrößen.
     fn connect(&self) -> Result<(), String> {
-        let config = serde_json::json!({
-            "offsets": self.mirror_sizes(),
-            "intervalMs": 2000,
-            "recentEverySeconds": 20,
-            "profilesEverySeconds": 30,
-            "recentLimit": RECENT_LIMIT,
-            "budget": BUDGET_BYTES,
-            "headBytes": crate::transcript::HEAD_BYTES,
-            "tailBytes": crate::TAIL_BYTES,
-            "tailsPerPass": TAILS_PER_PASS,
-            "wantFile": WANT_FILE,
-            "wantTtlSeconds": WANT_TTL.as_secs(),
-        });
-        let b64 = base64::engine::general_purpose::STANDARD;
-        let script = SCRIPT.replace("__CONFIG__", &b64.encode(config.to_string()));
         let mut child = ssh(&self.target)
-            .arg(powershell_command(&script))
+            .arg(sync_command(&self.mirror_sizes()))
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -425,6 +410,25 @@ fn powershell_command(script: &str) -> String {
     format!("powershell -NoProfile -NonInteractive -EncodedCommand {}", base64::engine::general_purpose::STANDARD.encode(utf16))
 }
 
+/// `remote_sync.ps1` with the dashboard's state spliced in, starting from the mirror sizes it already has
+fn sync_command(offsets: &HashMap<String, u64>) -> String {
+    let config = serde_json::json!({
+        "offsets": offsets,
+        "intervalMs": 2000,
+        "recentEverySeconds": 20,
+        "profilesEverySeconds": 30,
+        "recentLimit": RECENT_LIMIT,
+        "budget": BUDGET_BYTES,
+        "headBytes": crate::transcript::HEAD_BYTES,
+        "tailBytes": crate::TAIL_BYTES,
+        "tailsPerPass": TAILS_PER_PASS,
+        "wantFile": WANT_FILE,
+        "wantTtlSeconds": WANT_TTL.as_secs(),
+    });
+    let b64 = base64::engine::general_purpose::STANDARD;
+    powershell_command(&SCRIPT.replace("__CONFIG__", &b64.encode(config.to_string())))
+}
+
 fn run_ps(target: &str, script: &str) -> Option<String> {
     let out = ssh(target).arg(powershell_command(script)).stdin(Stdio::null()).output().ok()?;
     out.status.success().then(|| String::from_utf8_lossy(&out.stdout).into_owned())
@@ -495,5 +499,38 @@ mod tests {
     fn ssh_error_skips_the_post_quantum_notice() {
         let stderr = "** WARNING: connection is not using a post-quantum key exchange algorithm.\n** upgraded\nssh: connect to host x port 22: Operation timed out\n";
         assert_eq!(ssh_error(stderr), "ssh: connect to host x port 22: Operation timed out");
+    }
+
+    /// `cargo test -- --ignored probe_ends_when_its_session_is_gone`: Windows only, runs the real script
+    /// locally. Windows OpenSSH leaves a dropped session's shell running, so a stand-in for sshd starts
+    /// the probe the same way (`powershell -c "…"`) and is then killed.
+    #[cfg(windows)]
+    #[test]
+    #[ignore]
+    fn probe_ends_when_its_session_is_gone() {
+        const EXIT_WITHIN: Duration = Duration::from_secs(30);
+        let shell_args = format!("-c \"{}\"", sync_command(&HashMap::new()));
+        let mut sshd = Command::new("powershell")
+            .args(["-NoProfile", "-Command", "Start-Process powershell.exe -ArgumentList $env:PROBE_ARGS -NoNewWindow -Wait"])
+            .env("PROBE_ARGS", shell_args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let mut out = BufReader::new(sshd.stdout.take().unwrap());
+        let mut header = String::new();
+        out.read_line(&mut header).unwrap();
+        assert!(header.trim().parse::<usize>().is_ok(), "no frame: {header:?}");
+
+        sshd.kill().unwrap();
+        sshd.wait().unwrap();
+        // The shell and the probe inherited this pipe: it reaches EOF only once both have exited
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = std::io::copy(&mut out, &mut std::io::sink());
+            let _ = tx.send(());
+        });
+        assert!(rx.recv_timeout(EXIT_WITHIN).is_ok(), "probe still running {EXIT_WITHIN:?} after its session ended");
     }
 }

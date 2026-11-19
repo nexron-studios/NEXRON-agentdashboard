@@ -19,6 +19,23 @@ $wantFile = Join-Path $env:TEMP $cfg.wantFile
 $utf8 = New-Object Text.UTF8Encoding $false
 $stdout = [Console]::OpenStandardOutput()
 
+# Windows OpenSSH leaves this script running when the connection drops (sleep, network change, app
+# restart), and writing never fails: the shell between sshd and this script keeps draining the pipe,
+# and .NET Framework drops a write to a closed pipe without an exception. So the loop watches the
+# processes it was started from (the shell, sshd's per-connection processes) and ends once one is gone.
+$procs = @{}
+foreach ($p in Get-CimInstance Win32_Process -Property ProcessId, ParentProcessId, CreationDate) { $procs[[int]$p.ProcessId] = $p }
+$ancestors = @()
+$child = $procs[$PID]
+while ($child) {
+  $parent = $procs[[int]$child.ParentProcessId]
+  # A parent younger than its child is an unrelated process that got the PID of an exited one
+  if (-not $parent -or $parent.ProcessId -eq $child.ProcessId -or $parent.CreationDate -gt $child.CreationDate) { break }
+  $ancestors += [int]$parent.ProcessId
+  $child = $parent
+}
+function Test-SessionGone { @(Get-Process -Id $ancestors).Count -lt $ancestors.Count }
+
 # Bytes the dashboard already has: full mirrors by offset, tails by the file length they were cut from
 $sent = @{}
 foreach ($p in $cfg.offsets.PSObject.Properties) { $sent[$p.Name] = [long]$p.Value }
@@ -147,7 +164,7 @@ function Invoke-Pass {
   return $out
 }
 
-while ($true) {
+while (-not (Test-SessionGone)) {
   $started = Get-Date
   $bytes = $utf8.GetBytes((Invoke-Pass | ConvertTo-Json -Depth 6 -Compress))
   $header = $utf8.GetBytes("$($bytes.Length)`n")
